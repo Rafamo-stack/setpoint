@@ -16,10 +16,10 @@ type Player = {
 
 const PLAYERS: Record<PlayerId, Player> = {
   setter: { id: "setter", short: "LEV", role: "Levantador", shirt: 7, color: "#7259ff" },
-  outside1: { id: "outside1", short: "P1", role: "Ponteiro 1", shirt: 11, color: "#ff725e" },
+  outside1: { id: "outside1", short: "PT1", role: "Ponteiro 1", shirt: 11, color: "#ff725e" },
   middle1: { id: "middle1", short: "C1", role: "Central 1", shirt: 4, color: "#20a878" },
   opposite: { id: "opposite", short: "OPO", role: "Oposto", shirt: 9, color: "#eead2d" },
-  outside2: { id: "outside2", short: "P2", role: "Ponteiro 2", shirt: 2, color: "#e25798" },
+  outside2: { id: "outside2", short: "PT2", role: "Ponteiro 2", shirt: 2, color: "#e25798" },
   middle2: { id: "middle2", short: "C2", role: "Central 2", shirt: 15, color: "#1594bd" },
 };
 
@@ -47,8 +47,8 @@ const RESULTS: Record<string, string[]> = {
   Saque: ["Ace", "Em jogo", "Erro"],
   Recepção: ["Perfeita", "Positiva", "Negativa", "Erro"],
   Levantamento: ["Em jogo", "Erro"],
-  Ataque: ["Ponto", "Defendido", "Bloqueado", "Erro"],
-  Bloqueio: ["Ponto", "Toque", "Sem toque", "Erro"],
+  Ataque: ["Ponto", "Defendido", "Bloqueado (ponto)", "Erro"],
+  Bloqueio: ["Ponto", "Toque", "Erro"],
   Defesa: ["Perfeita", "Positiva", "Negativa", "Falha"],
 };
 
@@ -88,7 +88,9 @@ export default function PrototypePage() {
       ...current,
     ].slice(0, 4));
     if (result === "Ponto" || result === "Ace") setOurScore((score) => score + 1);
-    if (result === "Erro" || result === "Falha") setTheirScore((score) => score + 1);
+    if (result === "Erro" || result === "Falha" || result === "Bloqueado (ponto)") {
+      setTheirScore((score) => score + 1);
+    }
     setSelectedPlayer(null);
     setSelectedAction(null);
   }
@@ -142,7 +144,7 @@ export default function PrototypePage() {
 
       <div className={styles.workspace}>
         <section className={styles.courtPanel} aria-label="Quadra interativa">
-          <div className={styles.hint}>Clique em um jogador</div>
+          <div className={styles.hint}>Toque em um jogador</div>
           <div className={styles.courtStage}>
             <div className={styles.courtSurface} aria-hidden="true">
               <div className={styles.attackLineTop} />
