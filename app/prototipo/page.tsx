@@ -5,7 +5,7 @@ import styles from "./prototipo.module.css";
 
 type Mode = "indoor" | "beach";
 type Side = "home" | "away";
-type Phase = "preServe" | "reception" | "setting" | "attacking" | "defending" | "ended";
+type Phase = "preServe" | "reception" | "setting" | "attacking" | "blocking" | "covering" | "defending" | "ended";
 type RotationName = "P1" | "P6" | "P5" | "P4" | "P3" | "P2";
 type IndoorRole = "setter" | "outside1" | "middle1" | "opposite" | "outside2" | "middle2";
 
@@ -45,9 +45,10 @@ const RESULTS: Record<string, string[]> = {
   Saque: ["Ace", "Em jogo", "Erro"],
   Recepção: ["Perfeita", "Positiva", "Negativa", "Erro"],
   Levantamento: ["Em jogo", "Erro"],
-  Ataque: ["Ponto", "Defendido", "Bloqueado (ponto)", "Erro"],
+  Ataque: ["Ponto", "Defendido", "No bloqueio", "Bloqueado (ponto)", "Erro"],
   Bloqueio: ["Ponto", "Toque", "Erro"],
   Defesa: ["Perfeita", "Positiva", "Negativa", "Falha"],
+  Cobertura: ["Perfeita", "Positiva", "Negativa", "Falha"],
 };
 
 const SLOT_HOME: Record<number, Position> = {
@@ -87,6 +88,8 @@ const PHASE_COPY: Record<Phase, { title: string; detail: string }> = {
   reception: { title: "Saque em jogo", detail: "Recepção adversária pronta; nosso time assumiu bloqueio e defesa." },
   setting: { title: "Bola controlada", detail: "O levantador provável foi aberto automaticamente." },
   attacking: { title: "Organização de ataque", detail: "Escolha um dos atacantes destacados." },
+  blocking: { title: "Ataque no bloqueio", detail: "Toque em um bloqueador da rede e registre o desfecho." },
+  covering: { title: "Bola na cobertura", detail: "O ataque voltou. Toque em quem cobriu a bola." },
   defending: { title: "Ataque defendido", detail: "A posse mudou. Toque em quem realizou a defesa." },
   ended: { title: "Rally encerrado", detail: "O placar foi atualizado. Reinicie para demonstrar outro rally." },
 };
@@ -99,6 +102,7 @@ export default function PrototypePage() {
   const [expectedAction, setExpectedAction] = useState("Saque");
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [selectedAction, setSelectedAction] = useState<string | null>(null);
+  const [lastAttackSide, setLastAttackSide] = useState<Side>("home");
   const [ourScore, setOurScore] = useState(12);
   const [theirScore, setTheirScore] = useState(10);
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -155,6 +159,15 @@ export default function PrototypePage() {
       setter: { x: 64, y: 63 }, outside2: { x: 39, y: 81 }, middle2: { x: 58, y: 83 },
     };
     const mirror = (p: Position): Position => ({ x: 100 - p.x, y: 101 - p.y });
+    if (phase === "blocking") {
+      const teamRotation = player.side === "home" ? rotation : "P1";
+      const frontRoles = [ROTATIONS[teamRotation][4], ROTATIONS[teamRotation][3], ROTATIONS[teamRotation][2]];
+      if (player.side === expectedSide) {
+        const frontIndex = frontRoles.indexOf(player.role as IndoorRole);
+        if (frontIndex >= 0) return { x: [27, 50, 73][frontIndex], y: player.side === "home" ? 59 : 42 };
+      }
+      if (player.side === lastAttackSide) return player.side === "home" ? attack[player.role as IndoorRole] : mirror(attack[player.role as IndoorRole]);
+    }
     if (player.side === "home") {
       if (expectedSide === "home" && (phase === "setting" || phase === "attacking")) return attack[player.role as IndoorRole];
       return homeTactical[player.role as IndoorRole];
@@ -167,14 +180,29 @@ export default function PrototypePage() {
     if (phase === "ended") return false;
     if (phase === "preServe") return player.id === serverId;
     if (player.side !== expectedSide) return false;
-    if (phase === "setting") return player.id === selectedPlayerId;
+    if (phase === "setting") return player.id === selectedPlayerId || mode === "beach" || ["outside1", "middle1", "opposite"].includes(player.role);
     if (phase === "attacking") return mode === "beach" || ["outside1", "middle1", "opposite"].includes(player.role);
+    if (phase === "blocking") {
+      if (mode === "beach") return player.role === "beach1";
+      const teamRotation = player.side === "home" ? rotation : "P1";
+      const frontRoles = [ROTATIONS[teamRotation][2], ROTATIONS[teamRotation][3], ROTATIONS[teamRotation][4]];
+      return frontRoles.includes(player.role as IndoorRole);
+    }
     if (phase === "reception") return mode === "beach" || ["outside1", "outside2", "middle2"].includes(player.role);
-    return phase === "defending";
+    return phase === "defending" || phase === "covering";
   }
 
   function choosePlayer(player: Player) {
     if (phase === "ended") return;
+    if (phase === "setting" && player.side === expectedSide && player.id !== selectedPlayerId) {
+      const inferredSetter = players.find((candidate) => candidate.id === selectedPlayerId);
+      if (inferredSetter) addHistory(inferredSetter, "Levantamento", "Inferido");
+      setPhase("attacking");
+      setExpectedAction("Ataque");
+      setSelectedPlayerId(player.id);
+      setSelectedAction("Ataque");
+      return;
+    }
     setSelectedPlayerId(player.id);
     setSelectedAction(player.side === expectedSide ? expectedAction : null);
   }
@@ -221,11 +249,18 @@ export default function PrototypePage() {
     } else if (selectedAction === "Ataque") {
       if (result === "Ponto") return endRally(side);
       if (result === "Erro" || result === "Bloqueado (ponto)") return endRally(other);
+      if (result === "No bloqueio") {
+        setLastAttackSide(side); setPhase("blocking"); setExpectedSide(other); setExpectedAction("Bloqueio");
+        setSelectedPlayerId(null); setSelectedAction(null); return;
+      }
       setPhase("defending"); setExpectedSide(other); setExpectedAction("Defesa");
     } else if (selectedAction === "Bloqueio") {
       if (result === "Ponto") return endRally(side);
       if (result === "Erro") return endRally(other);
-      setPhase("defending"); setExpectedSide(side); setExpectedAction("Defesa");
+      setPhase("covering"); setExpectedSide(lastAttackSide); setExpectedAction("Cobertura");
+    } else if (selectedAction === "Cobertura") {
+      if (result === "Falha") return endRally(other);
+      return autoOpenSetter(side, selectedPlayer);
     }
     setSelectedPlayerId(null);
     setSelectedAction(null);
@@ -263,13 +298,13 @@ export default function PrototypePage() {
         <section className={styles.rotationBar}><div><span className={styles.label}>Praia</span><strong>Dupla e ordem de saque</strong></div><div className={styles.beachRule}>Sem P1–P6: receptor → parceiro levanta; sacador → parceiro bloqueia</div><div className={styles.serverInfo}><span>🏐</span><div><small>Sacador</small><strong>{server?.name} #{server?.shirt}</strong></div></div></section>
       )}
 
-      <section className={`${styles.phaseBanner} ${styles[`phase_${phase}`]}`}><div><small>Estado do rally</small><strong>{phaseCopy.title}</strong></div><p>{phaseCopy.detail}</p>{phase === "ended" && <button onClick={() => resetRally()}>Novo rally</button>}</section>
+      <section className={`${styles.phaseBanner} ${styles[`phase_${phase}`]}`}><div><small>Estado do rally</small><strong>{phaseCopy.title}</strong></div><p>{phaseCopy.detail}</p><button onClick={() => resetRally()}>{phase === "ended" ? "Novo rally" : "Reiniciar rally"}</button></section>
 
       <div className={styles.workspace}>
         <section className={styles.courtPanel}>
           <div className={styles.formationLabels}>
-            <span>{phase === "preServe" ? "Adversário · posição inicial" : expectedSide === "away" ? (phase === "reception" ? (mode === "beach" ? "Adversário · dupla na recepção" : "Adversário · recepção com 3 passadores") : "Adversário · posse") : (mode === "beach" ? "Adversário · bloqueador + defensor" : "Adversário · bloqueio + defesa")}</span>
-            <span>{phase === "preServe" ? (mode === "beach" ? "Nossa dupla · ordem de saque" : "Nosso time · rodízio legal") : expectedSide === "home" ? "Nosso time · posse" : (mode === "beach" ? "Nossa dupla · bloqueador + defensor" : "Nosso time · defesa 6-fundo")}</span>
+            <span>{phase === "blocking" ? (expectedSide === "away" ? "Adversário · bloqueadores da rede" : "Adversário · ataque + cobertura") : phase === "preServe" ? "Adversário · posição inicial" : expectedSide === "away" ? (phase === "reception" ? (mode === "beach" ? "Adversário · dupla na recepção" : "Adversário · recepção com 3 passadores · sem líbero") : "Adversário · posse") : (mode === "beach" ? "Adversário · bloqueador + defensor" : "Adversário · bloqueio + defesa")}</span>
+            <span>{phase === "blocking" ? (expectedSide === "home" ? "Nosso time · bloqueadores da rede" : "Nosso time · ataque + cobertura") : phase === "preServe" ? (mode === "beach" ? "Nossa dupla · ordem de saque" : "Nosso time · rodízio legal") : expectedSide === "home" ? "Nosso time · posse" : (mode === "beach" ? "Nossa dupla · bloqueador + defensor" : "Nosso time · defesa 6-fundo · sem líbero")}</span>
           </div>
           <div className={`${styles.courtStage} ${mode === "beach" ? styles.beachStage : ""}`}>
             <div className={styles.courtSurface} aria-hidden="true"><div className={styles.attackLineTop} /><div className={styles.attackLineBottom} /><div className={styles.net}><i /><i /><i /><i /></div></div>
