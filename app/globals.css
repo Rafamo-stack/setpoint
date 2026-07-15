@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light dark;
+  background: light-dark(rgb(255 255 255), rgb(24 24 24));
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+main {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  background: inherit;
+}
+
+.visualization-frame {
+  display: block;
+  width: 100%;
+  min-height: 100dvh;
+  border: 0;
+  background: inherit;
+}
