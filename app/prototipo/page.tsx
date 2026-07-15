@@ -154,11 +154,18 @@ export default function PrototypePage() {
       outside1: { x: 31, y: 23 }, outside2: { x: 69, y: 23 }, middle2: { x: 50, y: 19 },
       setter: { x: 65, y: 40 }, middle1: { x: 50, y: 40 }, opposite: { x: 35, y: 40 },
     };
-    const attack: Record<IndoorRole, Position> = {
-      outside1: { x: 28, y: 61 }, middle1: { x: 50, y: 59 }, opposite: { x: 73, y: 61 },
-      setter: { x: 64, y: 63 }, outside2: { x: 39, y: 81 }, middle2: { x: 58, y: 83 },
-    };
     const mirror = (p: Position): Position => ({ x: 100 - p.x, y: 101 - p.y });
+    const attackPosition = (athlete: Player): Position => {
+      const teamRotation = athlete.side === "home" ? rotation : "P1";
+      const slot = Number(Object.entries(ROTATIONS[teamRotation]).find(([, role]) => role === athlete.role)?.[0] ?? 6);
+      const front = slot === 2 || slot === 3 || slot === 4;
+      let homePosition: Position;
+      if (athlete.role === "setter") homePosition = front ? { x: 73, y: 61 } : { x: 64, y: 64 };
+      else if (athlete.role === "opposite") homePosition = front ? { x: 73, y: 61 } : { x: 72, y: 77 };
+      else if (athlete.role === "outside1" || athlete.role === "outside2") homePosition = front ? { x: 28, y: 61 } : { x: 34, y: 82 };
+      else homePosition = front ? { x: 50, y: 59 } : { x: 53, y: 84 };
+      return athlete.side === "home" ? homePosition : mirror(homePosition);
+    };
     if (phase === "blocking") {
       const teamRotation = player.side === "home" ? rotation : "P1";
       const frontRoles = [ROTATIONS[teamRotation][4], ROTATIONS[teamRotation][3], ROTATIONS[teamRotation][2]];
@@ -166,13 +173,13 @@ export default function PrototypePage() {
         const frontIndex = frontRoles.indexOf(player.role as IndoorRole);
         if (frontIndex >= 0) return { x: [27, 50, 73][frontIndex], y: player.side === "home" ? 59 : 42 };
       }
-      if (player.side === lastAttackSide) return player.side === "home" ? attack[player.role as IndoorRole] : mirror(attack[player.role as IndoorRole]);
+      if (player.side === lastAttackSide) return attackPosition(player);
     }
     if (player.side === "home") {
-      if (expectedSide === "home" && (phase === "setting" || phase === "attacking")) return attack[player.role as IndoorRole];
+      if (expectedSide === "home" && (phase === "setting" || phase === "attacking")) return attackPosition(player);
       return homeTactical[player.role as IndoorRole];
     }
-    if (expectedSide === "away" && (phase === "setting" || phase === "attacking")) return mirror(attack[player.role as IndoorRole]);
+    if (expectedSide === "away" && (phase === "setting" || phase === "attacking")) return attackPosition(player);
     return awayReception[player.role as IndoorRole];
   }
 
@@ -180,8 +187,8 @@ export default function PrototypePage() {
     if (phase === "ended") return false;
     if (phase === "preServe") return player.id === serverId;
     if (player.side !== expectedSide) return false;
-    if (phase === "setting") return player.id === selectedPlayerId || mode === "beach" || ["outside1", "middle1", "opposite"].includes(player.role);
-    if (phase === "attacking") return mode === "beach" || ["outside1", "middle1", "opposite"].includes(player.role);
+    if (phase === "setting") return player.id === selectedPlayerId || attackingRolesFor(player.side).includes(player.role);
+    if (phase === "attacking") return attackingRolesFor(player.side).includes(player.role);
     if (phase === "blocking") {
       if (mode === "beach") return player.role === "beach1";
       const teamRotation = player.side === "home" ? rotation : "P1";
@@ -269,6 +276,15 @@ export default function PrototypePage() {
   const server = players.find((player) => player.id === serverId);
   const phaseCopy = PHASE_COPY[phase];
 
+  function attackingRolesFor(side: Side) {
+    if (mode === "beach") return ["beach1", "beach2"];
+    const teamRotation = side === "home" ? rotation : "P1";
+    const front = [ROTATIONS[teamRotation][2], ROTATIONS[teamRotation][3], ROTATIONS[teamRotation][4]]
+      .filter((role) => role !== "setter");
+    if (!front.includes("opposite")) front.push("opposite");
+    return front;
+  }
+
   return (
     <main className={styles.shell}>
       <header className={styles.header}>
@@ -312,7 +328,7 @@ export default function PrototypePage() {
               const position = positionFor(player);
               const recommended = isRecommended(player);
               const style = { left: `${position.x}%`, top: `${position.y}%`, "--player-color": player.color } as CSSProperties;
-              return <button key={player.id} className={`${styles.player} ${player.side === "away" ? styles.awayPlayer : ""} ${selectedPlayerId === player.id ? styles.selectedPlayer : ""} ${recommended ? styles.recommendedPlayer : ""} ${player.id === serverId && phase === "preServe" ? styles.servingPlayer : ""}`} style={style} onClick={() => choosePlayer(player)}>
+              return <button key={player.id} aria-label={`${player.name}, ${player.side === "home" ? "nosso time" : "adversário"}, camisa ${player.shirt}`} className={`${styles.player} ${player.side === "away" ? styles.awayPlayer : ""} ${selectedPlayerId === player.id ? styles.selectedPlayer : ""} ${recommended ? styles.recommendedPlayer : ""} ${player.id === serverId && phase === "preServe" ? styles.servingPlayer : ""}`} style={style} onClick={() => choosePlayer(player)}>
                 <span className={styles.playerHead} /><span className={styles.playerBody}>{player.shirt}</span><span className={styles.playerLabel}><strong>{player.short}</strong><small>{player.side === "home" ? "NOS" : "ADV"}</small></span>
               </button>;
             })}
