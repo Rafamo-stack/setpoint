@@ -12,13 +12,20 @@
 }
 
 .header,
+.modeSwitch,
 .scoreboard,
 .rotationBar,
+.phaseBanner,
 .workspace,
 .footer {
   width: min(1380px, 100%);
   margin-inline: auto;
 }
+
+.modeSwitch { display: flex; align-items: center; gap: 8px; padding: 10px 0 14px; }
+.modeSwitch button { padding: 11px 16px; border: 1px solid var(--line); border-radius: 14px; color: #53616b; background: rgba(255,255,255,.75); font-weight: 850; cursor: pointer; }
+.modeSwitch .activeMode { border-color: #17212b; color: white; background: #17212b; }
+.modeSwitch > span { margin-left: auto; color: var(--muted); font-size: 12px; }
 
 .header {
   display: flex;
@@ -136,6 +143,19 @@
   background: rgba(251, 253, 253, .94);
 }
 
+.beachRule { padding: 11px 14px; border-radius: 12px; color: #765128; background: #fff5df; font-size: 13px; font-weight: 750; text-align: center; }
+
+.phaseBanner { display: grid; grid-template-columns: minmax(150px, .6fr) 1.5fr auto; align-items: center; gap: 18px; padding: 13px 18px; border-inline: 1px solid rgba(215, 226, 226, .9); color: white; background: #315f64; }
+.phaseBanner div { display: flex; flex-direction: column; }
+.phaseBanner small { opacity: .7; font-size: 10px; font-weight: 850; letter-spacing: .12em; text-transform: uppercase; }
+.phaseBanner strong { font-size: 17px; }
+.phaseBanner p { margin: 0; font-size: 13px; }
+.phaseBanner button { padding: 9px 13px; border: 0; border-radius: 11px; color: #26333c; background: white; font-weight: 850; cursor: pointer; }
+.phase_setting { background: #604fc4; }
+.phase_attacking { background: #a75439; }
+.phase_defending { background: #246d73; }
+.phase_ended { background: #27343c; }
+
 .rotationBar > div:first-child {
   display: flex;
   flex-direction: column;
@@ -215,6 +235,9 @@
   background: linear-gradient(180deg, #f8fbfa, #eef5f2);
 }
 
+.formationLabels { position: absolute; z-index: 6; inset: 14px 22px auto; display: flex; justify-content: space-between; pointer-events: none; }
+.formationLabels span { padding: 6px 10px; border-radius: 999px; color: #46565f; background: rgba(255,255,255,.88); box-shadow: 0 5px 14px rgba(33,54,55,.08); font-size: 10px; font-weight: 850; }
+
 .hint {
   position: absolute;
   z-index: 6;
@@ -249,6 +272,9 @@
   border-bottom: 7px solid #da8a49;
   filter: drop-shadow(0 24px 24px rgba(30, 62, 61, .18));
 }
+
+.beachStage .courtSurface { background: linear-gradient(90deg, transparent 49.7%, rgba(255,255,255,.55) 49.8% 50.2%, transparent 50.3%), linear-gradient(180deg, #efc778 0 49.6%, #f4b96d 49.7% 100%); border-bottom-color: #d49b4f; }
+.beachStage .attackLineTop, .beachStage .attackLineBottom { display: none; }
 
 .courtSurface::before {
   content: "";
@@ -322,7 +348,7 @@
   background: transparent;
   cursor: pointer;
   filter: drop-shadow(0 10px 9px rgba(40, 49, 50, .18));
-  transition: left .38s ease, top .38s ease, transform .18s ease;
+  transition: left .55s cubic-bezier(.2,.8,.2,1), top .55s cubic-bezier(.2,.8,.2,1), transform .18s ease, opacity .2s ease;
 }
 
 .player:hover,
@@ -376,6 +402,10 @@
   border-radius: 50%;
   animation: pulse 1.4s ease-out infinite;
 }
+
+.awayPlayer .playerBody { background: #237f86; }
+.recommendedPlayer::after { content: ""; position: absolute; top: 4px; width: 66px; height: 66px; border: 3px solid #ffd34d; border-radius: 50%; box-shadow: 0 0 0 7px rgba(255,211,77,.18); animation: recommend 1.15s ease-in-out infinite alternate; }
+@keyframes recommend { from { opacity: .45; transform: scale(.92); } to { opacity: 1; transform: scale(1.08); } }
 
 .servingPlayer::after {
   content: "🏐";
@@ -539,6 +569,7 @@
 
 @media (max-width: 900px) {
   .rotationBar { grid-template-columns: 1fr; }
+  .phaseBanner { grid-template-columns: 1fr; gap: 4px; }
   .serverInfo { justify-content: flex-start; }
   .workspace { grid-template-columns: 1fr; }
   .actionPanel { min-height: 390px; border-top: 1px solid var(--line); border-left: 0; }
@@ -549,6 +580,8 @@
 @media (max-width: 620px) {
   .shell { padding: 18px 10px 28px; }
   .header { align-items: flex-start; }
+  .modeSwitch { flex-wrap: wrap; }
+  .modeSwitch > span { width: 100%; margin-left: 0; }
   .prototypeFlag { padding: 7px 10px; font-size: 11px; }
   .scoreboard { grid-template-columns: 1fr auto 1fr; padding: 10px; }
   .teamScore { gap: 5px; flex-wrap: wrap; }
@@ -560,5 +593,6 @@
   .rotationButtons { gap: 5px; }
   .rotationButtons button { min-height: 38px; border-radius: 10px; font-size: 12px; }
   .courtPanel { padding-inline: 0; }
+  .formationLabels { inset-inline: 8px; }
   .actionPanel { padding: 18px; }
 }
