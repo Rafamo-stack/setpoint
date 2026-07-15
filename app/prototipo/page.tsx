@@ -118,6 +118,7 @@ export default function PrototypePage() {
     setExpectedAction("Saque");
     setSelectedPlayerId(null);
     setSelectedAction(null);
+    setHistory([]);
   }
 
   function positionFor(player: Player): Position {
@@ -267,8 +268,8 @@ export default function PrototypePage() {
       <div className={styles.workspace}>
         <section className={styles.courtPanel}>
           <div className={styles.formationLabels}>
-            <span>{phase === "preServe" ? "Adversário · posição inicial" : expectedSide === "away" ? (phase === "reception" ? "Adversário · recepção com 3 passadores" : "Adversário · posse") : "Adversário · bloqueio + defesa"}</span>
-            <span>{phase === "preServe" ? "Nosso time · rodízio legal" : expectedSide === "home" ? "Nosso time · posse" : "Nosso time · defesa 6-fundo"}</span>
+            <span>{phase === "preServe" ? "Adversário · posição inicial" : expectedSide === "away" ? (phase === "reception" ? (mode === "beach" ? "Adversário · dupla na recepção" : "Adversário · recepção com 3 passadores") : "Adversário · posse") : (mode === "beach" ? "Adversário · bloqueador + defensor" : "Adversário · bloqueio + defesa")}</span>
+            <span>{phase === "preServe" ? (mode === "beach" ? "Nossa dupla · ordem de saque" : "Nosso time · rodízio legal") : expectedSide === "home" ? "Nosso time · posse" : (mode === "beach" ? "Nossa dupla · bloqueador + defensor" : "Nosso time · defesa 6-fundo")}</span>
           </div>
           <div className={`${styles.courtStage} ${mode === "beach" ? styles.beachStage : ""}`}>
             <div className={styles.courtSurface} aria-hidden="true"><div className={styles.attackLineTop} /><div className={styles.attackLineBottom} /><div className={styles.net}><i /><i /><i /><i /></div></div>
