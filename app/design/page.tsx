@@ -116,27 +116,46 @@ const rosterNames: Record<number, string> = {
   22: "Tomás R.", 24: "Davi Costa", 27: "Enzo Melo", 29: "Nicolas S.", 31: "João Vitor", 35: "Matheus P.",
 };
 
+const nextRotationSlot: Record<number, number> = { 1: 6, 6: 5, 5: 4, 4: 3, 3: 2, 2: 1 };
+
+function rotatedSlot(initial: number, steps: number) {
+  let slot = initial;
+  for (let index = 0; index < steps; index += 1) slot = nextRotationSlot[slot];
+  return slot;
+}
+
+function slotPosition(slot: number, team: "home" | "away") {
+  const home: Record<number, { x: number; y: number }> = {
+    1: { x: 79, y: 87 }, 2: { x: 79, y: 69 }, 3: { x: 49, y: 66 },
+    4: { x: 19, y: 68 }, 5: { x: 20, y: 87 }, 6: { x: 49, y: 85 },
+  };
+  const away: Record<number, { x: number; y: number }> = {
+    1: { x: 20, y: 13 }, 2: { x: 20, y: 31 }, 3: { x: 50, y: 33 },
+    4: { x: 80, y: 31 }, 5: { x: 80, y: 13 }, 6: { x: 50, y: 15 },
+  };
+  return team === "home" ? home[slot] : away[slot];
+}
+
 function ScoutCockpit({ beach = false }: { beach?: boolean }) {
+  const [homeRotation, setHomeRotation] = useState(0);
+  const [awayRotation, setAwayRotation] = useState(0);
+  const [fullscreen, setFullscreen] = useState(false);
+  const setterHomeSlot = rotatedSlot(2, homeRotation);
+  const setterAwaySlot = rotatedSlot(1, awayRotation);
   const teamHome = beach
     ? [{ n: 3, role: "BLOQ", x: 52, y: 69 }, { n: 12, role: "DEF", x: 24, y: 86 }]
     : [
-        { n: 11, role: "PON", x: 19, y: 68 },
-        { n: 4, role: "CEN", x: 49, y: 66 },
-        { n: 7, role: "LEV", x: 79, y: 69 },
-        { n: 15, role: "CEN", x: 20, y: 87 },
-        { n: 2, role: "PON", x: 49, y: 85 },
-        { n: 9, role: "OPO", x: 79, y: 87 },
-      ];
+        { n: 11, role: "PON", slot: 4 }, { n: 4, role: "CEN", slot: 3 },
+        { n: 7, role: "LEV", slot: 2 }, { n: 15, role: "CEN", slot: 5 },
+        { n: 2, role: "PON", slot: 6 }, { n: 9, role: "OPO", slot: 1 },
+      ].map(player => ({ ...player, ...slotPosition(rotatedSlot(player.slot, homeRotation), "home") }));
   const teamAway = beach
     ? [{ n: 8, role: "BLOQ", x: 48, y: 31 }, { n: 14, role: "DEF", x: 76, y: 14 }]
     : [
-        { n: 29, role: "OPO", x: 21, y: 31 },
-        { n: 24, role: "CEN", x: 50, y: 33 },
-        { n: 31, role: "PON", x: 80, y: 30 },
-        { n: 22, role: "PON", x: 20, y: 13 },
-        { n: 35, role: "CEN", x: 50, y: 15 },
-        { n: 27, role: "LEV", x: 80, y: 13 },
-      ];
+        { n: 27, role: "LEV", slot: 1 }, { n: 31, role: "PON", slot: 2 },
+        { n: 24, role: "CEN", slot: 3 }, { n: 29, role: "OPO", slot: 4 },
+        { n: 22, role: "PON", slot: 5 }, { n: 35, role: "CEN", slot: 6 },
+      ].map(player => ({ ...player, ...slotPosition(rotatedSlot(player.slot, awayRotation), "away") }));
   const [selected, setSelected] = useState(beach ? 14 : 31);
   const [quality, setQuality] = useState("+");
   const [phase, setPhase] = useState(beach ? "Defesa" : "Recepção");
@@ -150,29 +169,29 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
   const playerName = rosterNames[selected] ?? (selected === 14 ? "Clara" : selected === 8 ? "Maya" : selected === 3 ? "Bia" : "Luna");
 
   return (
-    <section className={styles.scoutCockpit}>
+    <section className={`${styles.scoutCockpit} ${fullscreen ? styles.scoutFullscreen : ""}`}>
       <header className={styles.scoutTopbar}>
         <div className={styles.matchIdentity}><span className={styles.recordDot}>●</span><div><strong>{beach ? "CIRCUITO NACIONAL · QUARTAS" : "SUPERLIGA B · RODADA 11"}</strong><small>Scout ao vivo · sincronização local ativa</small></div></div>
         <div className={styles.cockpitScore}>
-          <div><span>{homeLabel}</span><b>{beach ? 17 : 12}</b><small>{beach ? "ORDEM 1" : "P2 · SAQUE"}</small></div>
+          <div><span>{homeLabel}</span><b>{beach ? 17 : 12}</b><small>{beach ? "ORDEM 1" : `P${setterHomeSlot} · SAQUE`}</small></div>
           <section><span>SET {beach ? 2 : 1}</span><strong>×</strong><small>{beach ? "1–0" : "0–0"}</small></section>
-          <div><small>{beach ? "ORDEM 2" : "P1 · RECEPÇÃO"}</small><b>{beach ? 16 : 10}</b><span>{awayLabel}</span></div>
+          <div><small>{beach ? "ORDEM 2" : `P${setterAwaySlot} · RECEPÇÃO`}</small><b>{beach ? 16 : 10}</b><span>{awayLabel}</span></div>
         </div>
-        <div className={styles.scoutUtilities}><button>Ⅱ Pausar</button><button>⋯</button></div>
+        <div className={styles.scoutUtilities}><button onClick={() => setFullscreen(value => !value)}>{fullscreen ? "× Sair da tela cheia" : "⛶ Tela cheia"}</button><button>Ⅱ Pausar</button><button>⋯</button></div>
       </header>
 
       <div className={styles.scoutWorkspace}>
         <aside className={styles.rostersPanel}>
-          <div className={styles.panelHead}><span>ESCALAÇÕES</span><button>↻ Rodízio</button></div>
-          <div className={styles.teamStrip}><i className={styles.homeSwatch} /><strong>{homeLabel}</strong><small>{beach ? "SACANDO" : "P2"}</small></div>
+          <div className={styles.panelHead}><span>ESCALAÇÕES</span><button onClick={() => !beach && setHomeRotation(value => (value + 1) % 6)}>↻ Rodar nosso</button></div>
+          <div className={styles.teamStrip}><i className={styles.homeSwatch} /><strong>{homeLabel}</strong>{beach ? <small>SACANDO</small> : <button onClick={() => setHomeRotation(value => (value + 1) % 6)}>P{setterHomeSlot} ↻</button>}</div>
           <div className={styles.rosterList}>
             {teamHome.map((p) => <RosterMini key={p.n} number={p.n} role={p.role} name={rosterNames[p.n] ?? (p.n === 3 ? "Bia" : "Luna")} team="home" active={selected === p.n} onClick={() => setSelected(p.n)} />)}
           </div>
-          <div className={styles.teamStrip}><i className={styles.awaySwatch} /><strong>{awayLabel}</strong><small>{beach ? "RECEBENDO" : "P1"}</small></div>
+          <div className={styles.teamStrip}><i className={styles.awaySwatch} /><strong>{awayLabel}</strong>{beach ? <small>RECEBENDO</small> : <button onClick={() => setAwayRotation(value => (value + 1) % 6)}>P{setterAwaySlot} ↻</button>}</div>
           <div className={styles.rosterList}>
             {teamAway.map((p) => <RosterMini key={p.n} number={p.n} role={p.role} name={rosterNames[p.n] ?? (p.n === 8 ? "Maya" : "Clara")} team="away" active={selected === p.n} onClick={() => setSelected(p.n)} />)}
           </div>
-          {!beach && <div className={styles.rotationStatus}><span>ROTAÇÃO ATUAL</span><div>{["P1","P6","P5","P4","P3","P2"].map((p,i)=><b className={i===5?styles.rotationActive:""} key={p}>{p}</b>)}</div><small>Formação: recepção com 3 · sem líbero</small></div>}
+          {!beach && <div className={styles.rotationStatus}><span>ROTAÇÃO DO LEVANTADOR</span><div>{["P1","P6","P5","P4","P3","P2"].map((p)=><b className={p===`P${setterHomeSlot}`?styles.rotationActive:""} key={p}>{p}</b>)}</div><small>Toque em ↻ para animar o próximo side-out</small></div>}
           {beach && <div className={styles.conditions}><span>CONDIÇÕES</span><p><b>↗ 24 km/h</b> vento lateral</p><p><b>☀ 31°C</b> sol lado mar</p><p><b>Troca</b> em 4 pontos</p></div>}
         </aside>
 
@@ -186,11 +205,13 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
             <div className={styles.threeMeterTop} />
             <div className={styles.threeMeterBottom} />
             {allPlayers.map((p) => <CourtToken key={`${p.team}-${p.n}`} number={p.n} role={p.role} x={p.x} y={p.y} team={p.team} active={selected === p.n} onClick={() => setSelected(p.n)} />)}
+            {!beach && (homeRotation > 0 || awayRotation > 0) && <div key={`${homeRotation}-${awayRotation}`} className={styles.rotationMotion}>↻ Rodízio · SetMatch P{setterHomeSlot} · Athletic P{setterAwaySlot}</div>}
             <div className={styles.trajectory}><i /><b>➤</b><small>{beach ? "largada · diagonal curta" : "saque flutuante · Z1 → Z5"}</small></div>
             <span className={styles.scoutBall}>●</span>
           </div>
           <div className={styles.courtFooter}>
             <span><b>ETAPA 1</b> toque no atleta</span><span className={styles.stepDone}><b>ETAPA 2</b> escolha o fundamento</span><span><b>ETAPA 3</b> avalie e confirme</span>
+            {!beach && <button onClick={() => setHomeRotation(value => (value + 1) % 6)}>↻ Animar nosso rodízio</button>}
             <button>◎ Inverter quadra</button>
           </div>
         </main>
