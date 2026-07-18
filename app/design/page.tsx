@@ -92,128 +92,132 @@ function Metric({ label, value, detail, tone }: { label: string; value: string; 
   );
 }
 
-function CourtView({ concept }: { concept: Concept }) {
-  const [selected, setSelected] = useState(27);
-  const selectedPlayer = awayPlayers.find((player) => player.n === selected);
+function RosterMini({ number, role, name, team, active, onClick }: { number: number; role: string; name: string; team: "home" | "away"; active: boolean; onClick: () => void }) {
   return (
-    <section className={styles.liveGrid}>
-      <div className={styles.liveMain}>
-        <div className={styles.scoreRibbon}>
-          <div><span>SET 1</span><strong>12</strong><small>SETMATCH</small></div>
-          <span className={styles.livePulse}>● AO VIVO</span>
-          <div><small>ATHLETIC VÔLEI</small><strong>10</strong><span>0:18</span></div>
+    <button className={`${styles.rosterMini} ${styles[team]} ${active ? styles.rosterActive : ""}`} onClick={onClick}>
+      <span className={styles.miniPortrait}><i /><b>{number}</b></span>
+      <span><strong>{name}</strong><small>{role}</small></span>
+      <em>{active ? "SELEC." : "+"}</em>
+    </button>
+  );
+}
+
+function CourtToken({ number, role, x, y, team, active, onClick }: { number: number; role: string; x: number; y: number; team: "home" | "away"; active: boolean; onClick: () => void }) {
+  return (
+    <button className={`${styles.courtToken} ${styles[team]} ${active ? styles.tokenActive : ""}`} style={{ left: `${x}%`, top: `${y}%` }} onClick={onClick} aria-label={`${role} camisa ${number}`}>
+      <span className={styles.tokenBody}><i /><b>{number}</b></span>
+      <small>{role}</small>
+    </button>
+  );
+}
+
+const rosterNames: Record<number, string> = {
+  2: "André Lima", 4: "Bruno Reis", 7: "Rafael Luz", 9: "Lucas Prado", 11: "Caio Mendes", 15: "Igor Nunes",
+  22: "Tomás R.", 24: "Davi Costa", 27: "Enzo Melo", 29: "Nicolas S.", 31: "João Vitor", 35: "Matheus P.",
+};
+
+function ScoutCockpit({ beach = false }: { beach?: boolean }) {
+  const teamHome = beach ? [{ n: 3, role: "BLOQ", x: 50, y: 72 }, { n: 12, role: "DEF", x: 24, y: 86 }] : homePlayers;
+  const teamAway = beach ? [{ n: 8, role: "BLOQ", x: 50, y: 28 }, { n: 14, role: "DEF", x: 76, y: 14 }] : awayPlayers;
+  const [selected, setSelected] = useState(beach ? 14 : 31);
+  const [quality, setQuality] = useState("+");
+  const [phase, setPhase] = useState(beach ? "Defesa" : "Recepção");
+  const allPlayers = [...teamHome.map(p => ({ ...p, team: "home" as const })), ...teamAway.map(p => ({ ...p, team: "away" as const }))];
+  const current = allPlayers.find(p => p.n === selected) ?? allPlayers[0];
+  const indoorActions = ["Saque", "Recepção", "Levantamento", "Ataque", "Bloqueio", "Defesa"];
+  const beachActions = ["Saque", "Recepção", "Levantamento", "Ataque", "Bloqueio", "Defesa", "Chamada"];
+  const actions = beach ? beachActions : indoorActions;
+  const homeLabel = beach ? "LUNA / BIA" : "SETMATCH";
+  const awayLabel = beach ? "MAYA / CLARA" : "ATHLETIC";
+  const playerName = rosterNames[selected] ?? (selected === 14 ? "Clara" : selected === 8 ? "Maya" : selected === 3 ? "Bia" : "Luna");
+
+  return (
+    <section className={styles.scoutCockpit}>
+      <header className={styles.scoutTopbar}>
+        <div className={styles.matchIdentity}><span className={styles.recordDot}>●</span><div><strong>{beach ? "CIRCUITO NACIONAL · QUARTAS" : "SUPERLIGA B · RODADA 11"}</strong><small>Scout ao vivo · sincronização local ativa</small></div></div>
+        <div className={styles.cockpitScore}>
+          <div><span>{homeLabel}</span><b>{beach ? 17 : 12}</b><small>{beach ? "ORDEM 1" : "P2 · SAQUE"}</small></div>
+          <section><span>SET {beach ? 2 : 1}</span><strong>×</strong><small>{beach ? "1–0" : "0–0"}</small></section>
+          <div><small>{beach ? "ORDEM 2" : "P1 · RECEPÇÃO"}</small><b>{beach ? 16 : 10}</b><span>{awayLabel}</span></div>
         </div>
-        <div className={styles.indoorScene}>
-          <div className={styles.arenaLights}><i /><i /><i /><i /><i /></div>
-          <div className={styles.crowd} />
-          <div className={styles.courtPerspective}>
-            <div className={styles.net}><i /><i /><i /><i /><i /></div>
-            <div className={styles.attackLineTop} />
-            <div className={styles.attackLineBottom} />
-            <div className={styles.courtHalfTop}>
-              {awayPlayers.map((p) => (
-                <Athlete key={p.n} number={p.n} role={p.role} x={p.x} y={p.y} team="away" active={selected === p.n} onClick={() => setSelected(p.n)} />
-              ))}
-            </div>
-            <div className={styles.courtHalfBottom}>
-              {homePlayers.map((p) => (
-                <Athlete key={p.n} number={p.n} role={p.role} x={p.x} y={p.y} team="home" active={selected === p.n} onClick={() => setSelected(p.n)} />
-              ))}
-            </div>
-            <span className={styles.ball}>●</span>
+        <div className={styles.scoutUtilities}><button>Ⅱ Pausar</button><button>⋯</button></div>
+      </header>
+
+      <div className={styles.scoutWorkspace}>
+        <aside className={styles.rostersPanel}>
+          <div className={styles.panelHead}><span>ESCALAÇÕES</span><button>↻ Rodízio</button></div>
+          <div className={styles.teamStrip}><i className={styles.homeSwatch} /><strong>{homeLabel}</strong><small>{beach ? "SACANDO" : "P2"}</small></div>
+          <div className={styles.rosterList}>
+            {teamHome.map((p) => <RosterMini key={p.n} number={p.n} role={p.role} name={rosterNames[p.n] ?? (p.n === 3 ? "Bia" : "Luna")} team="home" active={selected === p.n} onClick={() => setSelected(p.n)} />)}
           </div>
-          <div className={styles.sceneCaption}>
-            <span>FASE ATUAL</span>
-            <strong>Levantamento adversário</strong>
-            <small>Toque no atleta que fará a próxima ação</small>
+          <div className={styles.teamStrip}><i className={styles.awaySwatch} /><strong>{awayLabel}</strong><small>{beach ? "RECEBENDO" : "P1"}</small></div>
+          <div className={styles.rosterList}>
+            {teamAway.map((p) => <RosterMini key={p.n} number={p.n} role={p.role} name={rosterNames[p.n] ?? (p.n === 8 ? "Maya" : "Clara")} team="away" active={selected === p.n} onClick={() => setSelected(p.n)} />)}
           </div>
-        </div>
+          {!beach && <div className={styles.rotationStatus}><span>ROTAÇÃO ATUAL</span><div>{["P1","P6","P5","P4","P3","P2"].map((p,i)=><b className={i===5?styles.rotationActive:""} key={p}>{p}</b>)}</div><small>Formação: recepção com 3 · sem líbero</small></div>}
+          {beach && <div className={styles.conditions}><span>CONDIÇÕES</span><p><b>↗ 24 km/h</b> vento lateral</p><p><b>☀ 31°C</b> sol lado mar</p><p><b>Troca</b> em 4 pontos</p></div>}
+        </aside>
+
+        <main className={styles.scoutCenter}>
+          <div className={styles.workspaceTabs}><button className={styles.workspaceTabActive}>Quadra</button><button>Trajetórias</button><button>Distribuição</button><button>Vídeo</button><span>Rally #{beach ? 41 : 28}</span></div>
+          <div className={`${styles.scoutCourt} ${beach ? styles.scoutBeach : ""}`}>
+            <div className={styles.courtGrid}>
+              {[1,2,3,4,5,6,7,8,9].map(z=><span key={z}>{z}</span>)}
+            </div>
+            <div className={styles.scoutNet}><i /><i /><i /><i /><i /><i /></div>
+            <div className={styles.threeMeterTop} />
+            <div className={styles.threeMeterBottom} />
+            {allPlayers.map((p) => <CourtToken key={`${p.team}-${p.n}`} number={p.n} role={p.role} x={p.x} y={p.y} team={p.team} active={selected === p.n} onClick={() => setSelected(p.n)} />)}
+            <div className={styles.trajectory}><i /><b>➤</b><small>{beach ? "largada · diagonal curta" : "saque flutuante · Z1 → Z5"}</small></div>
+            <span className={styles.scoutBall}>●</span>
+          </div>
+          <div className={styles.courtFooter}>
+            <span><b>ETAPA 1</b> toque no atleta</span><span className={styles.stepDone}><b>ETAPA 2</b> escolha o fundamento</span><span><b>ETAPA 3</b> avalie e confirme</span>
+            <button>◎ Inverter quadra</button>
+          </div>
+        </main>
+
+        <aside className={styles.codesPanel}>
+          <div className={styles.panelHead}><span>RALLY EM TEMPO REAL</span><button>＋ Ação</button></div>
+          <div className={styles.rallyMeta}><b>Rally {beach ? "#41" : "#28"}</b><span>00:18</span><em>BOLA VIVA</em></div>
+          <div className={styles.codeStream}>
+            <article><time>00:02</time><i className={styles.homeCode}>SAQ</i><div><strong>#{beach ? 12 : 15} {beach ? "Luna" : "Igor Nunes"}</strong><span>{beach ? "flutuante · fundo" : "flutuante · Z1→Z5"}</span><code>*15SM+</code></div><button>⋮</button></article>
+            <article><time>00:05</time><i className={styles.awayCode}>REC</i><div><strong>#{beach ? 8 : 31} {beach ? "Maya" : "João Vitor"}</strong><span>recepção positiva</span><code>a{beach ? "08" : "31"}R+</code></div><button>⋮</button></article>
+            <article><time>00:08</time><i className={styles.awayCode}>LEV</i><div><strong>#{beach ? 14 : 27} {beach ? "Clara" : "Enzo Melo"}</strong><span>{beach ? "levantamento alto" : "levantamento na saída"}</span><code>a{beach ? "14" : "27"}E#</code></div><button>⋮</button></article>
+            <article className={styles.codeCurrent}><time>AGORA</time><i className={styles.awayCode}>{phase.slice(0,3).toUpperCase()}</i><div><strong>#{selected} {playerName}</strong><span>aguardando avaliação</span><code>—</code></div><button>×</button></article>
+          </div>
+          <div className={styles.liveMiniStats}><span>DESEMPENHO NO SET</span><div><p><b>68%</b><small>Side-out</small></p><p><b>42%</b><small>Break point</small></p><p><b>+3</b><small>W–L</small></p></div></div>
+          <div className={styles.correctionBar}><button>↶ Desfazer</button><button>✎ Editar rally</button><button>⚑ Ponto direto</button></div>
+        </aside>
       </div>
-      <aside className={styles.actionPanel}>
-        <div className={styles.panelEyebrow}>PRÓXIMA AÇÃO</div>
-        <div className={styles.selectedProfile}>
-          <div className={styles.profileAvatar}>{selected}</div>
-          <div><span>ATHLETIC VÔLEI</span><strong>{selectedPlayer?.role ?? "ATLETA"} #{selected}</strong><small>Recomendado pelo sistema</small></div>
+
+      <div className={styles.inputConsole}>
+        <div className={styles.selectedConsole}>
+          <span className={styles.consoleAvatar}><i /><b>{selected}</b></span>
+          <div><small>{current.team === "home" ? homeLabel : awayLabel}</small><strong>{playerName}</strong><em>{current.role} · selecionado</em></div>
+          <button>Trocar atleta</button>
         </div>
-        <h3>O que aconteceu?</h3>
-        <div className={styles.actionButtons}>
-          <button className={styles.primaryAction}>Levantar <kbd>Q</kbd></button>
-          <button>Passar de segunda <kbd>W</kbd></button>
-          <button>Corrigir atleta <kbd>E</kbd></button>
+        <div className={styles.fundamentals}>
+          <span>FUNDAMENTO</span>
+          <div>{actions.map((a,i)=><button key={a} className={phase===a?styles.fundamentalActive:""} onClick={()=>setPhase(a)}><kbd>{i+1}</kbd>{a}</button>)}</div>
         </div>
-        <div className={styles.quality}>
-          <span>QUALIDADE DO CONTATO</span>
-          <div><button>—</button><button>!</button><button className={styles.qualityActive}>+</button><button>#</button></div>
+        <div className={styles.evaluation}>
+          <span>AVALIAÇÃO</span>
+          <div>{[["=","Erro"],["-","Negativa"],["!","Neutra"],["+","Positiva"],["#","Perfeita"]].map(([q,l])=><button key={q} className={quality===q?styles.evalActive:""} onClick={()=>setQuality(q)}><b>{q}</b><small>{l}</small></button>)}</div>
         </div>
-        <div className={styles.timeline}>
-          <span>ÚLTIMOS CONTATOS</span>
-          <p><b>SAQ</b> #15 Central 2 <em>em jogo</em></p>
-          <p><b>REC</b> #31 Ponteiro <em>positiva</em></p>
-          <p className={styles.pending}><b>LEV</b> aguardando registro</p>
-        </div>
-        <button className={styles.undo}>↶ Desfazer último contato</button>
-        {concept === "arena" && <div className={styles.coachHint}>IA TÁTICA · chance de ataque pela saída <b>42%</b></div>}
-      </aside>
+        <button className={styles.confirmAction}><small>REGISTRAR</small><strong>{phase} {quality}</strong><kbd>ENTER</kbd></button>
+      </div>
+      <div className={styles.codingLine}><span>LINHA RÁPIDA</span><code>{current.team === "home" ? "*" : "a"}{selected}{phase.slice(0,1).toUpperCase()}{quality}</code><input aria-label="Linha de código opcional" placeholder="Digite um código ou use os controles acima…" /><button>Adicionar detalhe</button></div>
     </section>
   );
 }
 
+function CourtView({ concept: _concept }: { concept: Concept }) {
+  return <ScoutCockpit />;
+}
+
 function BeachView() {
-  const [selected, setSelected] = useState(14);
-  return (
-    <section className={styles.liveGrid}>
-      <div className={styles.liveMain}>
-        <div className={styles.scoreRibbon}>
-          <div><span>SET 2</span><strong>17</strong><small>LUNA / BIA</small></div>
-          <span className={styles.weather}>↗ 24 km/h · ☀ 31°</span>
-          <div><small>MAYA / CLARA</small><strong>16</strong><span>LADO MAR</span></div>
-        </div>
-        <div className={styles.beachScene}>
-          <div className={styles.sun} />
-          <div className={styles.sea}><i /><i /><i /></div>
-          <div className={styles.sandCourt}>
-            <div className={styles.beachNet} />
-            <div className={styles.beachTop}>
-              <Athlete number={8} role="BLOQ" x={48} y={29} team="away" beach active={selected === 8} onClick={() => setSelected(8)} />
-              <Athlete number={14} role="DEF" x={72} y={68} team="away" beach active={selected === 14} onClick={() => setSelected(14)} />
-            </div>
-            <div className={styles.beachBottom}>
-              <Athlete number={3} role="BLOQ" x={51} y={31} team="home" beach active={selected === 3} onClick={() => setSelected(3)} />
-              <Athlete number={12} role="DEF" x={27} y={72} team="home" beach active={selected === 12} onClick={() => setSelected(12)} />
-            </div>
-            <span className={styles.ballBeach}>●</span>
-          </div>
-          <div className={styles.windCard}><span>VENTO</span><strong>↗ Lateral forte</strong><small>Rajadas para o fundo da quadra</small></div>
-        </div>
-      </div>
-      <aside className={styles.actionPanel}>
-        <div className={styles.panelEyebrow}>SCOUT PRAIA · ORDEM 2</div>
-        <div className={styles.selectedProfile}>
-          <div className={styles.profileAvatar}>{selected}</div>
-          <div><span>DUPLA MAYA / CLARA</span><strong>Atleta #{selected}</strong><small>Lado mar · defendendo</small></div>
-        </div>
-        <h3>Defesa registrada</h3>
-        <div className={styles.actionButtons}>
-          <button className={styles.primaryAction}>Positiva <kbd>Q</kbd></button>
-          <button>Negativa <kbd>W</kbd></button>
-          <button>Perfeita <kbd>E</kbd></button>
-          <button>Falha <kbd>R</kbd></button>
-        </div>
-        <div className={styles.beachRead}>
-          <span>LEITURA DA JOGADA</span>
-          <p><b>Defensor:</b> Clara #14</p>
-          <p><b>Chamada:</b> linha</p>
-          <p><b>Ataque:</b> largada curta</p>
-        </div>
-        <div className={styles.timeline}>
-          <span>SEQUÊNCIA</span>
-          <p><b>SAQ</b> Luna #12 <em>zona curta</em></p>
-          <p><b>REC</b> Maya #8 <em>perfeita</em></p>
-          <p><b>ATA</b> Maya #8 <em>largada</em></p>
-        </div>
-      </aside>
-    </section>
-  );
+  return <ScoutCockpit beach />;
 }
 
 function CommandView() {
