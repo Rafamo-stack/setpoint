@@ -153,6 +153,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
   const [selectedZone, setSelectedZone] = useState<number | null>(null);
   const [servingTeam, setServingTeam] = useState<TeamSide>("home");
   const [winner, setWinner] = useState<TeamSide | null>(null);
+  const [beachAttacker, setBeachAttacker] = useState(8);
   const [homeScore, setHomeScore] = useState(beach ? 17 : 12);
   const [awayScore, setAwayScore] = useState(beach ? 16 : 10);
   const [events, setEvents] = useState<RallyEvent[]>([]);
@@ -178,8 +179,10 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
   const homeLabel = beach ? "LUNA / BIA" : "SETMATCH";
   const awayLabel = beach ? "MAYA / CLARA" : "ATHLETIC";
   const playerName = rosterNames[selected] ?? (selected === 14 ? "Clara" : selected === 8 ? "Maya" : selected === 3 ? "Bia" : "Luna");
-  const setterNumber = possession === "home" ? (beach ? 3 : 7) : (beach ? 14 : 27);
-  const attackOptions = possession === "home" ? (beach ? [12] : [11, 4, 9]) : (beach ? [8] : [29, 31, 24]);
+  const setterNumber = beach
+    ? (possession === "home" ? (beachAttacker === 3 ? 12 : 3) : (beachAttacker === 8 ? 14 : 8))
+    : (possession === "home" ? 7 : 27);
+  const attackOptions = possession === "home" ? (beach ? [beachAttacker] : [11, 4, 9]) : (beach ? [beachAttacker] : [29, 31, 24]);
   const phaseStep: Record<RallyPhase, string> = {
     ready: "SAQUE", "reception-player": "RECEPÇÃO", "contact-zone": contactKind === "reception" ? "RECEPÇÃO" : "DEFESA",
     "setter-quality": "LEVANTAMENTO", "attack-player": "OPÇÕES DE ATAQUE", "attack-target": "DIREÇÃO DO ATAQUE",
@@ -243,6 +246,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     const validReceiver = beach || player.role === "PON" || player.role === "LIB";
     if (((rallyPhase === "reception-player" && validReceiver) || rallyPhase === "defense-player") && player.team === possession) {
       setSelected(player.n);
+      if (beach) setBeachAttacker(player.n);
       setSelectedZone(null);
       setRallyPhase("contact-zone");
       return;
