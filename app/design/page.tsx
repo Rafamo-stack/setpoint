@@ -117,8 +117,26 @@ const rosterNames: Record<number, string> = {
 };
 
 function ScoutCockpit({ beach = false }: { beach?: boolean }) {
-  const teamHome = beach ? [{ n: 3, role: "BLOQ", x: 50, y: 72 }, { n: 12, role: "DEF", x: 24, y: 86 }] : homePlayers;
-  const teamAway = beach ? [{ n: 8, role: "BLOQ", x: 50, y: 28 }, { n: 14, role: "DEF", x: 76, y: 14 }] : awayPlayers;
+  const teamHome = beach
+    ? [{ n: 3, role: "BLOQ", x: 52, y: 69 }, { n: 12, role: "DEF", x: 24, y: 86 }]
+    : [
+        { n: 11, role: "PON", x: 19, y: 68 },
+        { n: 4, role: "CEN", x: 49, y: 66 },
+        { n: 7, role: "LEV", x: 79, y: 69 },
+        { n: 15, role: "CEN", x: 20, y: 87 },
+        { n: 2, role: "PON", x: 49, y: 85 },
+        { n: 9, role: "OPO", x: 79, y: 87 },
+      ];
+  const teamAway = beach
+    ? [{ n: 8, role: "BLOQ", x: 48, y: 31 }, { n: 14, role: "DEF", x: 76, y: 14 }]
+    : [
+        { n: 29, role: "OPO", x: 21, y: 31 },
+        { n: 24, role: "CEN", x: 50, y: 33 },
+        { n: 31, role: "PON", x: 80, y: 30 },
+        { n: 22, role: "PON", x: 20, y: 13 },
+        { n: 35, role: "CEN", x: 50, y: 15 },
+        { n: 27, role: "LEV", x: 80, y: 13 },
+      ];
   const [selected, setSelected] = useState(beach ? 14 : 31);
   const [quality, setQuality] = useState("+");
   const [phase, setPhase] = useState(beach ? "Defesa" : "Recepção");
