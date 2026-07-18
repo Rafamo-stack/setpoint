@@ -1,10 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import styles from "./design.module.css";
+import smart from "./smart.module.css";
 
 type Concept = "arena" | "tactical";
 type View = "command" | "court" | "beach" | "analysis" | "management";
+type RallyPhase = "ready" | "reception-player" | "contact-zone" | "setter-quality" | "attack-player" | "attack-target" | "block-result" | "attack-result" | "defense-player" | "rally-end";
+type TeamSide = "home" | "away";
+type RallyEvent = { tag: string; player: string; detail: string; grade: string; team: TeamSide };
 
 const views: Array<{ id: View; label: string; icon: string }> = [
   { id: "command", label: "Central", icon: "⌂" },
@@ -102,9 +106,9 @@ function RosterMini({ number, role, name, team, active, onClick }: { number: num
   );
 }
 
-function CourtToken({ number, role, x, y, team, active, onClick }: { number: number; role: string; x: number; y: number; team: "home" | "away"; active: boolean; onClick: () => void }) {
+function CourtToken({ number, role, x, y, team, active, suggested, onClick }: { number: number; role: string; x: number; y: number; team: TeamSide; active: boolean; suggested?: boolean; onClick: () => void }) {
   return (
-    <button className={`${styles.courtToken} ${styles[team]} ${active ? styles.tokenActive : ""}`} style={{ left: `${x}%`, top: `${y}%` }} onClick={onClick} aria-label={`${role} camisa ${number}`}>
+    <button className={`${styles.courtToken} ${styles[team]} ${active ? styles.tokenActive : ""} ${suggested ? smart.suggestedToken : ""}`} style={{ left: `${x}%`, top: `${y}%` }} onClick={onClick} aria-label={`${role} camisa ${number}`}>
       <span className={styles.tokenBody}><i /><b>{number}</b></span>
       <small>{role}</small>
     </button>
@@ -142,7 +146,16 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
   const [fullscreen, setFullscreen] = useState(false);
   const [advanced, setAdvanced] = useState(false);
   const [command, setCommand] = useState("");
-  const [lastCommand, setLastCommand] = useState("Pronto para registrar");
+  const [lastCommand, setLastCommand] = useState("Atalhos prontos para uso");
+  const [rallyPhase, setRallyPhase] = useState<RallyPhase>("ready");
+  const [possession, setPossession] = useState<TeamSide>("away");
+  const [contactKind, setContactKind] = useState<"reception" | "defense">("reception");
+  const [selectedZone, setSelectedZone] = useState<number | null>(null);
+  const [servingTeam, setServingTeam] = useState<TeamSide>("home");
+  const [winner, setWinner] = useState<TeamSide | null>(null);
+  const [homeScore, setHomeScore] = useState(beach ? 17 : 12);
+  const [awayScore, setAwayScore] = useState(beach ? 16 : 10);
+  const [events, setEvents] = useState<RallyEvent[]>([]);
   const setterHomeSlot = rotatedSlot(2, homeRotation);
   const setterAwaySlot = rotatedSlot(1, awayRotation);
   const teamHome = beach
@@ -157,19 +170,159 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     : [
         { n: 27, role: "LEV", slot: 1 }, { n: 31, role: "PON", slot: 2 },
         { n: 24, role: "CEN", slot: 3 }, { n: 29, role: "OPO", slot: 4 },
-        { n: 22, role: "PON", slot: 5 }, { n: 35, role: "CEN", slot: 6 },
+        { n: 22, role: "PON", slot: 5 }, { n: 35, role: "LIB", slot: 6 },
       ].map(player => ({ ...player, ...slotPosition(rotatedSlot(player.slot, awayRotation), "away") }));
-  const [selected, setSelected] = useState(beach ? 14 : 31);
-  const [quality, setQuality] = useState("+");
-  const [phase, setPhase] = useState(beach ? "Defesa" : "Recepção");
+  const [selected, setSelected] = useState(beach ? 12 : 15);
   const allPlayers = [...teamHome.map(p => ({ ...p, team: "home" as const })), ...teamAway.map(p => ({ ...p, team: "away" as const }))];
   const current = allPlayers.find(p => p.n === selected) ?? allPlayers[0];
-  const indoorActions = ["Saque", "Recepção", "Levantamento", "Ataque", "Bloqueio", "Defesa"];
-  const beachActions = ["Saque", "Recepção", "Levantamento", "Ataque", "Bloqueio", "Defesa", "Chamada"];
-  const actions = beach ? beachActions : indoorActions;
   const homeLabel = beach ? "LUNA / BIA" : "SETMATCH";
   const awayLabel = beach ? "MAYA / CLARA" : "ATHLETIC";
   const playerName = rosterNames[selected] ?? (selected === 14 ? "Clara" : selected === 8 ? "Maya" : selected === 3 ? "Bia" : "Luna");
+  const setterNumber = possession === "home" ? (beach ? 3 : 7) : (beach ? 14 : 27);
+  const attackOptions = possession === "home" ? (beach ? [12] : [11, 4, 9]) : (beach ? [8] : [29, 31, 24]);
+  const phaseStep: Record<RallyPhase, string> = {
+    ready: "SAQUE", "reception-player": "RECEPÇÃO", "contact-zone": contactKind === "reception" ? "RECEPÇÃO" : "DEFESA",
+    "setter-quality": "LEVANTAMENTO", "attack-player": "OPÇÕES DE ATAQUE", "attack-target": "DIREÇÃO DO ATAQUE",
+    "block-result": "TOQUE NO BLOQUEIO", "attack-result": "RESULTADO", "defense-player": "DEFESA", "rally-end": "FIM DO RALLY",
+  };
+  const prompt: Record<RallyPhase, string> = {
+    ready: "Pressione Enter para iniciar o saque",
+    "reception-player": "Quem recebeu? Toque no atleta",
+    "contact-zone": "Onde o passe terminou? Toque em uma das 9 zonas",
+    "setter-quality": `Levantador #${setterNumber} aberto automaticamente`,
+    "attack-player": "Escolha uma opção de ataque destacada",
+    "attack-target": "Para onde foi o ataque? Escolha a zona",
+    "block-result": "A bola tocou no bloqueio?",
+    "attack-result": "Qual foi o resultado do ataque?",
+    "defense-player": "Quem defendeu? Toque no atleta",
+    "rally-end": `${winner === "home" ? homeLabel : awayLabel} marcou o ponto`,
+  };
+
+  function playerLabel(number: number) {
+    return `#${number} ${rosterNames[number] ?? (number === 14 ? "Clara" : number === 8 ? "Maya" : number === 3 ? "Bia" : "Luna")}`;
+  }
+
+  function serverFor(team: TeamSide) {
+    if (beach) return team === "home" ? 12 : 14;
+    const source = team === "home" ? teamHome : teamAway;
+    const rotation = team === "home" ? homeRotation : awayRotation;
+    return source.find(player => "slot" in player && rotatedSlot(player.slot, rotation) === 1)?.n ?? (team === "home" ? 9 : 27);
+  }
+
+  function beginRally() {
+    const server = serverFor(servingTeam);
+    const receiverSide = servingTeam === "home" ? "away" : "home";
+    setWinner(null);
+    setSelected(server);
+    setSelectedZone(null);
+    setPossession(receiverSide);
+    setContactKind("reception");
+    setEvents([{ tag: "SAQ", player: playerLabel(server), detail: "Saque em jogo", grade: "+", team: servingTeam }]);
+    setRallyPhase("reception-player");
+  }
+
+  function addEvent(event: RallyEvent) {
+    setEvents(value => [...value, event]);
+  }
+
+  function finishRally(side: TeamSide, detail: string) {
+    setWinner(side);
+    addEvent({ tag: "PTO", player: side === "home" ? homeLabel : awayLabel, detail, grade: "●", team: side });
+    if (side === "home") setHomeScore(value => value + 1); else setAwayScore(value => value + 1);
+    if (side !== servingTeam) {
+      if (!beach) {
+        if (side === "home") setHomeRotation(value => (value + 1) % 6);
+        else setAwayRotation(value => (value + 1) % 6);
+      }
+      setServingTeam(side);
+    }
+    setRallyPhase("rally-end");
+  }
+
+  function handlePlayerClick(player: typeof allPlayers[number]) {
+    const validReceiver = beach || player.role === "PON" || player.role === "LIB";
+    if (((rallyPhase === "reception-player" && validReceiver) || rallyPhase === "defense-player") && player.team === possession) {
+      setSelected(player.n);
+      setSelectedZone(null);
+      setRallyPhase("contact-zone");
+      return;
+    }
+    if (rallyPhase === "attack-player" && player.team === possession && attackOptions.includes(player.n)) {
+      setSelected(player.n);
+      setSelectedZone(null);
+      setRallyPhase("attack-target");
+    }
+  }
+
+  function gradeForZone(zone: number) {
+    if (zone === 2) return { grade: "#", label: "perfeita" };
+    if ([1, 3, 5].includes(zone)) return { grade: "+", label: "positiva" };
+    if ([4, 6].includes(zone)) return { grade: "!", label: "fora do sistema" };
+    return { grade: "-", label: "negativa" };
+  }
+
+  function handleZone(zone: number) {
+    setSelectedZone(zone);
+    if (rallyPhase === "contact-zone") {
+      const result = gradeForZone(zone);
+      addEvent({ tag: contactKind === "reception" ? "REC" : "DEF", player: playerLabel(selected), detail: `${contactKind === "reception" ? "Recepção" : "Defesa"} ${result.label} · Z${zone}`, grade: result.grade, team: possession });
+      setSelected(setterNumber);
+      setRallyPhase("setter-quality");
+    } else if (rallyPhase === "attack-target") {
+      addEvent({ tag: "ATA", player: playerLabel(selected), detail: `Ataque direcionado para Z${zone}`, grade: "→", team: possession });
+      setRallyPhase("block-result");
+    }
+  }
+
+  function chooseSet(grade: string, label: string) {
+    addEvent({ tag: "LEV", player: playerLabel(setterNumber), detail: `Levantamento ${label.toLowerCase()}`, grade, team: possession });
+    if (label === "Segunda") {
+      setSelected(setterNumber);
+      setRallyPhase("attack-target");
+    } else setRallyPhase("attack-player");
+  }
+
+  function chooseBlock(kind: string) {
+    const blocker = possession === "home" ? "away" : "home";
+    if (kind === "Bloqueio ponto") {
+      addEvent({ tag: "BLQ", player: blocker === "home" ? homeLabel : awayLabel, detail: kind, grade: "#", team: blocker });
+      finishRally(blocker, "Ponto de bloqueio");
+      return;
+    }
+    addEvent({ tag: "BLQ", player: blocker === "home" ? homeLabel : awayLabel, detail: kind, grade: kind === "Desviou" ? "+" : "·", team: blocker });
+    setRallyPhase("attack-result");
+  }
+
+  function chooseAttackResult(kind: string) {
+    if (kind === "Ponto") return finishRally(possession, "Ponto de ataque");
+    if (kind === "Erro") return finishRally(possession === "home" ? "away" : "home", "Erro de ataque adversário");
+    if (kind === "Defesa") {
+      setPossession(possession === "home" ? "away" : "home");
+      setContactKind("defense");
+      setRallyPhase("defense-player");
+    } else setRallyPhase("attack-player");
+  }
+
+  function isSuggested(player: typeof allPlayers[number]) {
+    if (rallyPhase === "reception-player") return player.team === possession && (beach || player.role === "PON" || player.role === "LIB");
+    if (rallyPhase === "defense-player") return player.team === possession;
+    if (rallyPhase === "setter-quality") return player.n === setterNumber;
+    if (rallyPhase === "attack-player") return player.team === possession && attackOptions.includes(player.n);
+    return false;
+  }
+
+  useEffect(() => {
+    function handleEnter(event: KeyboardEvent) {
+      if ((event.target as HTMLElement)?.tagName === "INPUT") return;
+      if (event.key === "Enter" && (rallyPhase === "ready" || rallyPhase === "rally-end")) beginRally();
+    }
+    window.addEventListener("keydown", handleEnter);
+    return () => window.removeEventListener("keydown", handleEnter);
+  });
+
+  const selectedPlayer = allPlayers.find(player => player.n === selected);
+  const ballPosition = selectedPlayer ? { x: selectedPlayer.x, y: selectedPlayer.y - 5 } : { x: 50, y: 50 };
+  const zoneSide: TeamSide = rallyPhase === "attack-target" ? (possession === "home" ? "away" : "home") : possession;
 
   function submitCommand() {
     const value = command.trim();
@@ -181,9 +334,9 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
   return (
     <section className={`${styles.simpleScout} ${fullscreen ? styles.simpleScoutFullscreen : ""}`}>
       <header className={styles.simpleScore}>
-        <div className={styles.simpleTeam}><i className={styles.homeSwatch} /><span>{homeLabel}<small>{beach ? "Ordem 1" : `Levantador P${setterHomeSlot}`}</small></span><b>{beach ? 17 : 12}</b></div>
+        <div className={styles.simpleTeam}><i className={styles.homeSwatch} /><span>{homeLabel}<small>{beach ? "Ordem 1" : `Levantador P${setterHomeSlot}`}</small></span><b>{homeScore}</b></div>
         <div className={styles.setBadge}><span>SET {beach ? 2 : 1}</span><strong>×</strong><small>Rally #{beach ? 41 : 28}</small></div>
-        <div className={`${styles.simpleTeam} ${styles.simpleAway}`}><b>{beach ? 16 : 10}</b><span>{awayLabel}<small>{beach ? "Ordem 2" : `Levantador P${setterAwaySlot}`}</small></span><i className={styles.awaySwatch} /></div>
+        <div className={`${styles.simpleTeam} ${styles.simpleAway}`}><b>{awayScore}</b><span>{awayLabel}<small>{beach ? "Ordem 2" : `Levantador P${setterAwaySlot}`}</small></span><i className={styles.awaySwatch} /></div>
         <nav className={styles.simpleTools}>
           {!beach && <button onClick={() => setHomeRotation(value => (value + 1) % 6)}>↻ Rodízio</button>}
           <button onClick={() => setAdvanced(value => !value)}>{advanced ? "Ocultar detalhes" : "Mais detalhes"}</button>
@@ -193,40 +346,47 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
 
       <div className={styles.simpleStage}>
         <main className={styles.simpleCourtArea}>
-          <div className={styles.simplePrompt}><span>PRÓXIMA AÇÃO</span><strong>Toque no atleta que fez o contato</strong></div>
+          <div className={styles.simplePrompt}><span>{phaseStep[rallyPhase]}</span><strong>{prompt[rallyPhase]}</strong></div>
           <div className={`${styles.simpleCourt} ${beach ? styles.simpleBeachCourt : ""}`}>
             <div className={styles.courtGrid}>{[1,2,3,4,5,6,7,8,9].map(zone => <span key={zone}>{zone}</span>)}</div>
             <div className={styles.scoutNet}><i /><i /><i /><i /><i /><i /></div>
             <div className={styles.threeMeterTop} /><div className={styles.threeMeterBottom} />
-            {allPlayers.map(player => <CourtToken key={`${player.team}-${player.n}`} number={player.n} role={player.role} x={player.x} y={player.y} team={player.team} active={selected === player.n} onClick={() => setSelected(player.n)} />)}
+            {allPlayers.map(player => <CourtToken key={`${player.team}-${player.n}`} number={player.n} role={player.role} x={player.x} y={player.y} team={player.team} active={selected === player.n} suggested={isSuggested(player)} onClick={() => handlePlayerClick(player)} />)}
+            <span className={smart.smartBall} style={{ left: `${ballPosition.x}%`, top: `${ballPosition.y}%` }}>●</span>
+            {(rallyPhase === "contact-zone" || rallyPhase === "attack-target") && (
+              <div className={`${smart.zonePicker} ${zoneSide === "away" ? smart.zoneTop : smart.zoneBottom}`}>
+                {[1,2,3,4,5,6,7,8,9].map(zone => <button key={zone} className={selectedZone === zone ? smart.zoneSelected : ""} onClick={() => handleZone(zone)} aria-label={`Zona ${zone}`}><b>{zone}</b><small>{zone === 2 ? "ideal" : ""}</small></button>)}
+              </div>
+            )}
             {!beach && (homeRotation > 0 || awayRotation > 0) && <div key={`${homeRotation}-${awayRotation}`} className={styles.rotationMotion}>↻ Rodízio atualizado · P{setterHomeSlot}</div>}
           </div>
         </main>
 
         <aside className={styles.simpleHistory}>
-          <div className={styles.simpleHistoryHead}><div><span>RALLY ATUAL</span><strong>Últimos contatos</strong></div><em>● BOLA VIVA</em></div>
-          <article><i className={styles.homeCode}>SAQ</i><div><strong>#{beach ? 12 : 15} {beach ? "Luna" : "Igor"}</strong><span>Saque em jogo</span></div><b>+</b></article>
-          <article><i className={styles.awayCode}>REC</i><div><strong>#{beach ? 8 : 31} {beach ? "Maya" : "João Vitor"}</strong><span>Recepção positiva</span></div><b>+</b></article>
-          <article><i className={styles.awayCode}>LEV</i><div><strong>#{beach ? 14 : 27} {beach ? "Clara" : "Enzo"}</strong><span>Levantamento</span></div><b>#</b></article>
+          <div className={styles.simpleHistoryHead}><div><span>RALLY ATUAL</span><strong>Leitura automática</strong></div><em>● {rallyPhase === "rally-end" ? "FINALIZADO" : rallyPhase === "ready" ? "AGUARDANDO" : "BOLA VIVA"}</em></div>
+          {events.length === 0 && <div className={smart.emptyRally}><b>ENTER</b><span>Inicia o saque e abre o fluxo visual.</span></div>}
+          {events.map((event, index) => <article key={`${event.tag}-${index}`}><i className={event.team === "home" ? styles.homeCode : styles.awayCode}>{event.tag}</i><div><strong>{event.player}</strong><span>{event.detail}</span></div><b>{event.grade}</b></article>)}
           <button className={styles.undoSimple}>↶ Desfazer último</button>
           {advanced && <div className={styles.advancedDrawer}><strong>Detalhes avançados</strong><p>Código equivalente: <code>a31R+</code></p><p>Rotação: P{setterAwaySlot}</p><p>Trajetória: Z1 → Z5</p><button>Editar rally completo</button></div>}
         </aside>
       </div>
 
-      <div className={styles.simpleActionDock}>
+      <div className={`${styles.simpleActionDock} ${smart.actionDock}`}>
         <div className={styles.simpleSelected}>
           <span className={styles.consoleAvatar}><i /><b>{selected}</b></span>
-          <div><small>{current.team === "home" ? homeLabel : awayLabel}</small><strong>{playerName}</strong><em>{phase} selecionada</em></div>
+          <div><small>{current.team === "home" ? homeLabel : awayLabel}</small><strong>{playerName}</strong><em>{phaseStep[rallyPhase]}</em></div>
         </div>
-        <div className={styles.contextActions}>
-          <span>O QUE ACONTECEU?</span>
-          <div>{actions.slice(0, beach ? 5 : 4).map(action => <button key={action} className={phase === action ? styles.contextActive : ""} onClick={() => setPhase(action)}>{action}</button>)}</div>
+        <div className={smart.smartDecision}>
+          <span>{phaseStep[rallyPhase]}</span><strong>{prompt[rallyPhase]}</strong>
+          <div className={smart.decisionButtons}>
+            {rallyPhase === "ready" && <button className={smart.primaryDecision} onClick={beginRally}>▶ Iniciar saque <kbd>Enter</kbd></button>}
+            {rallyPhase === "setter-quality" && [["-","Ruim"],["+","Boa"],["#","Perfeita"],["↗","Segunda"]].map(([grade,label]) => <button key={label} onClick={() => chooseSet(grade,label)}><b>{grade}</b>{label}</button>)}
+            {rallyPhase === "block-result" && ["Sem bloqueio","Desviou","Amorteceu","Bloqueio ponto"].map(label => <button key={label} onClick={() => chooseBlock(label)}>{label}</button>)}
+            {rallyPhase === "attack-result" && ["Ponto","Defesa","Erro","Continua"].map(label => <button key={label} onClick={() => chooseAttackResult(label)}>{label}</button>)}
+            {rallyPhase === "rally-end" && <button className={smart.primaryDecision} onClick={beginRally}>Novo rally <kbd>Enter</kbd></button>}
+          </div>
         </div>
-        <div className={styles.contextQuality}>
-          <span>RESULTADO</span>
-          <div>{[["=","Erro"],["-","Ruim"],["+","Positiva"],["#","Perfeita"]].map(([value,label]) => <button key={value} className={quality === value ? styles.qualityChosen : ""} onClick={() => setQuality(value)}><b>{value}</b>{label}</button>)}</div>
-        </div>
-        <button className={styles.simpleConfirm}>Confirmar <strong>{phase} {quality}</strong><kbd>Enter</kbd></button>
+        <div className={smart.flowRail}><span className={events.some(event => event.tag === "SAQ") ? smart.flowDone : ""}>Saque</span><i>›</i><span className={events.some(event => event.tag === "REC" || event.tag === "DEF") ? smart.flowDone : ""}>Passe</span><i>›</i><span className={events.some(event => event.tag === "LEV") ? smart.flowDone : ""}>Levantamento</span><i>›</i><span className={events.some(event => event.tag === "ATA") ? smart.flowDone : ""}>Ataque</span></div>
       </div>
 
       <div className={styles.commandChat}>
