@@ -273,7 +273,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
       const middleServing = team === servingTeam && player.role.startsWith("M") && slot === 1;
       const liberoIn = player.role.startsWith("M") && (slot === 1 || slot >= 5) && !middleServing;
       const role: IndoorRole = liberoIn ? "LIB" : player.role;
-      const isServerAtLine = team === servingTeam && slot === 1 && (rallyPhase === "ready" || rallyPhase === "serve-flight");
+      const isServerAtLine = team === servingTeam && slot === 1 && (rallyPhase === "ready" || rallyPhase === "serve-flight" || rallyPhase === "rally-end");
       const point = isServerAtLine ? servicePoint(team) : functionalPoint(role, slot, setterSlot, mode, role === "LEV" && team === possession ? passTarget : undefined, team);
       return { ...player, n: liberoIn ? liberoNumber : player.n, role, baseRole: player.role, slot, ...point };
     });
