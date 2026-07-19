@@ -6,14 +6,14 @@ import smart from "./smart.module.css";
 
 type Concept = "arena" | "tactical";
 type View = "command" | "court" | "beach" | "analysis" | "management";
-type RallyPhase = "ready" | "serve-flight" | "reception-player" | "contact-zone" | "setter-quality" | "attack-player" | "attack-target" | "block-result" | "attack-result" | "defense-player" | "rally-end";
+type RallyPhase = "ready" | "serve-flight" | "reception-player" | "contact-zone" | "setter-quality" | "attack-player" | "attack-target" | "attack-subzone" | "block-result" | "attack-result" | "defense-player" | "rally-end";
 type TeamSide = "home" | "away";
 type RallyEvent = { tag: string; player: string; detail: string; grade: string; team: TeamSide };
 type ServeOrigin = 5 | 6 | 1;
 type AthleteProfile = { n: number; name: string; role: string; team: TeamSide; serveOrigin: ServeOrigin; serveTarget: number; note: string };
 type AttackTechnique = "Ataque" | "Largada" | "Segunda";
 type AttackDirection = "Paralela" | "Diagonal" | "Centro";
-type AttackRecord = { player: number; technique: AttackTechnique; direction: AttackDirection; zone: number; result: string; block: string; reliable: boolean };
+type AttackRecord = { player: number; technique: AttackTechnique; direction: AttackDirection; zone: number; subzone?: string; result: string; block: string; reliable: boolean };
 type PendingSet = { id: number; setter: number; team: TeamSide; attacker: number; quality: "Boa" | "Ruim" };
 
 const views: Array<{ id: View; label: string; icon: string }> = [
@@ -284,6 +284,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
   const [attackTechnique, setAttackTechnique] = useState<AttackTechnique>("Ataque");
   const [attackBlock, setAttackBlock] = useState("Sem desvio");
   const [attackZone, setAttackZone] = useState<number | null>(null);
+  const [attackSubzone, setAttackSubzone] = useState<string | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewWinner, setReviewWinner] = useState<TeamSide>("home");
   const [reviewReason, setReviewReason] = useState("Erro de ataque");
@@ -300,7 +301,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     { n: 24, role: "M1" as const, slot: 3 }, { n: 29, role: "OP" as const, slot: 4 },
     { n: 22, role: "P2" as const, slot: 5 }, { n: 35, role: "M2" as const, slot: 6 },
   ];
-  const attackPhases: RallyPhase[] = ["setter-quality", "attack-player", "attack-target", "block-result", "attack-result"];
+  const attackPhases: RallyPhase[] = ["setter-quality", "attack-player", "attack-target", "attack-subzone", "block-result", "attack-result"];
   const receptionPhases: RallyPhase[] = ["ready", "serve-flight", "reception-player", "contact-zone"];
 
   function modeFor(team: TeamSide): FormationMode {
@@ -347,6 +348,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
   const phaseStep: Record<RallyPhase, string> = {
     ready: "SAQUE", "serve-flight": "SAQUE", "reception-player": "RECEPÇÃO", "contact-zone": contactKind === "reception" ? "RECEPÇÃO" : "DEFESA",
     "setter-quality": "LEVANTAMENTO", "attack-player": "OPÇÕES DE ATAQUE", "attack-target": "DIREÇÃO DO ATAQUE",
+    "attack-subzone": "PRECISÃO DO ATAQUE",
     "block-result": "TOQUE NO BLOQUEIO", "attack-result": "RESULTADO", "defense-player": "DEFESA", "rally-end": "FIM DO RALLY",
   };
   const prompt: Record<RallyPhase, string> = {
@@ -357,6 +359,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     "setter-quality": `Levantador #${setterNumber} aberto automaticamente`,
     "attack-player": "Toque em quem recebeu a bola · levantador = segunda",
     "attack-target": `${attackTechnique} de ${playerLabel(selected)} · escolha a direção`,
+    "attack-subzone": `Zona ${attackZone} escolhida · marque uma das partes A–I`,
     "block-result": "A bola tocou no bloqueio?",
     "attack-result": "Qual foi o resultado do ataque?",
     "defense-player": "Quem defendeu? Toque no atleta",
@@ -381,6 +384,8 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     setSelected(server);
     setSelectedZone(null);
     setPassTarget(undefined);
+    setAttackZone(null);
+    setAttackSubzone(null);
     setSetterTargets({});
     setPendingSets([]);
     setPossession(receiverSide);
@@ -428,6 +433,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
       setSelected(player.n);
       setSelectedZone(null);
       setAttackZone(null);
+      setAttackSubzone(null);
       setAttackBlock("Sem desvio");
       setAttackTechnique(isSetterChoice ? "Segunda" : "Ataque");
       addEvent({ tag: "LEV", player: playerLabel(setterNumber), detail: isSetterChoice ? "Levantador passou de segunda" : `Levantamento assumido correto para ${playerLabel(player.n)}`, grade: isSetterChoice ? "↗" : "#", team: possession });
@@ -468,9 +474,24 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
       setRallyPhase("attack-player");
     } else if (rallyPhase === "attack-target") {
       setAttackZone(zone);
-      addEvent({ tag: "ATA", player: playerLabel(selected), detail: `${attackTechnique} para Z${zone}${attackBlock === "Sem desvio" ? " · trajetória limpa" : ` · ${attackBlock.toLowerCase()}`}`, grade: "→", team: possession });
-      setRallyPhase("attack-result");
+      setAttackSubzone(null);
+      setRallyPhase("attack-subzone");
     }
+  }
+
+  function attackDetailPoint(zone: number, subzone: string, side: TeamSide) {
+    const center = zonePoint(zone, side);
+    const index = Math.max(0, "ABCDEFGHI".indexOf(subzone));
+    const row = Math.floor(index / 3);
+    const column = index % 3;
+    return { x: center.x + [-11.1,0,11.1][column], y: center.y + [-5.55,0,5.55][row] };
+  }
+
+  function chooseAttackSubzone(subzone: string) {
+    if (!attackZone) return;
+    setAttackSubzone(subzone);
+    addEvent({ tag: "ATA", player: playerLabel(selected), detail: `${attackTechnique} para Z${attackZone}${subzone}${attackBlock === "Sem desvio" ? " · trajetória limpa" : ` · ${attackBlock.toLowerCase()}`}`, grade: "→", team: possession });
+    setRallyPhase("attack-result");
   }
 
   function chooseSet(grade: string, label: string) {
@@ -497,7 +518,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
       const attacker = allPlayers.find(player => player.n === selected);
       const targetX = zonePoint(attackZone, possession === "home" ? "away" : "home").x;
       const direction: AttackDirection = !attacker || (attacker.x > 34 && attacker.x < 66) ? "Centro" : (attacker.x < 34 && targetX < 34) || (attacker.x > 66 && targetX > 66) ? "Paralela" : "Diagonal";
-      setAttackRecords(value => [...value, { player: selected, technique: attackTechnique, direction, zone: attackZone, result: kind, block: attackBlock, reliable: attackBlock === "Sem desvio" || kind === "Bloqueio" }]);
+      setAttackRecords(value => [...value, { player: selected, technique: attackTechnique, direction, zone: attackZone, subzone: attackSubzone ?? undefined, result: kind, block: attackBlock, reliable: attackBlock === "Sem desvio" || kind === "Bloqueio" }]);
     }
     if (kind === "Ponto") return requestRallyEnd(possession, "Bola no chão");
     if (kind === "Erro") return requestRallyEnd(possession === "home" ? "away" : "home", "Erro de ataque");
@@ -528,9 +549,10 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
 
   const selectedPlayer = allPlayers.find(player => player.n === selected);
   const ballAtPass = passTarget && ["setter-quality", "attack-player"].includes(rallyPhase);
+  const detailedAttackTarget = attackZone && attackSubzone ? attackDetailPoint(attackZone, attackSubzone, possession === "home" ? "away" : "home") : null;
   const incomingServe = rallyPhase === "reception-player" && contactKind === "reception";
-  const ballPosition = ballAtPass ? passTarget : incomingServe ? { x: 50, y: servingTeam === "home" ? 25 : 75 } : selectedPlayer ? { x: selectedPlayer.x, y: selectedPlayer.y - 5 } : { x: 50, y: 50 };
-  const zoneSide: TeamSide = rallyPhase === "attack-target" ? (possession === "home" ? "away" : "home") : possession;
+  const ballPosition = detailedAttackTarget ?? (ballAtPass ? passTarget : incomingServe ? { x: 50, y: servingTeam === "home" ? 25 : 75 } : selectedPlayer ? { x: selectedPlayer.x, y: selectedPlayer.y - 5 } : { x: 50, y: 50 });
+  const zoneSide: TeamSide = rallyPhase === "attack-target" || rallyPhase === "attack-subzone" ? (possession === "home" ? "away" : "home") : possession;
 
   function cycleHomeRotation(direction: 1 | -1) {
     setHomeRotation(value => (value + direction + 6) % 6);
@@ -607,6 +629,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
                 {[1,2,3,4,5,6,7,8,9].map(zone => <button key={zone} className={selectedZone === zone ? smart.zoneSelected : ""} onClick={() => handleZone(zone)} aria-label={`Zona ${zone}`}><b>{zone}</b><small>{gradeForZone(zone, zoneSide).grade === "#" ? "ideal" : ""}</small></button>)}
               </div>
             )}
+            {rallyPhase === "attack-subzone" && attackZone && <div className={`${smart.subzonePicker} ${zoneSide === "away" ? smart.zoneTop : smart.zoneBottom}`}><header><b>ZONA {attackZone}</b><span>Escolha o detalhe</span></header><div>{[..."ABCDEFGHI"].map(letter => <button key={letter} onClick={() => chooseAttackSubzone(letter)} aria-label={`Zona ${attackZone}${letter}`}>{letter}</button>)}</div></div>}
             {!beach && (homeRotation > 0 || awayRotation > 0) && <div key={`${homeRotation}-${awayRotation}`} className={styles.rotationMotion}>↻ Rodízio atualizado · P{setterHomeSlot}</div>}
           </div>
         </main>
@@ -630,7 +653,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
           <div className={smart.decisionButtons}>
             {rallyPhase === "ready" && <button className={smart.primaryDecision} onClick={beginRally}>▶ Iniciar saque <kbd>Enter</kbd></button>}
             {rallyPhase === "setter-quality" && [["-","Ruim"],["+","Boa"],["#","Perfeita"],["↗","Segunda"]].map(([grade,label]) => <button key={label} onClick={() => chooseSet(grade,label)}><b>{grade}</b>{label}</button>)}
-            {rallyPhase === "attack-target" && <><button className={attackTechnique === "Ataque" ? smart.primaryDecision : ""} onClick={() => setAttackTechnique("Ataque")}>Ataque</button><button className={attackTechnique === "Largada" ? smart.primaryDecision : ""} onClick={() => setAttackTechnique("Largada")}>Largada</button><button className={attackBlock === "Desviou" ? smart.primaryDecision : ""} onClick={() => setAttackBlock(value => value === "Desviou" ? "Sem desvio" : "Desviou")}>{attackBlock === "Desviou" ? "✓ Desviou" : "Sem desvio"}</button></>}
+            {(rallyPhase === "attack-target" || rallyPhase === "attack-subzone") && <><button className={attackTechnique === "Ataque" ? smart.primaryDecision : ""} onClick={() => setAttackTechnique("Ataque")}>Ataque</button><button className={attackTechnique === "Largada" ? smart.primaryDecision : ""} onClick={() => setAttackTechnique("Largada")}>Largada</button><button className={attackBlock === "Desviou" ? smart.primaryDecision : ""} onClick={() => setAttackBlock(value => value === "Desviou" ? "Sem desvio" : "Desviou")}>{attackBlock === "Desviou" ? "✓ Desviou" : "Sem desvio"}</button>{rallyPhase === "attack-subzone" && <button onClick={() => { setAttackZone(null); setAttackSubzone(null); setRallyPhase("attack-target"); }}>Trocar zona</button>}</>}
             {rallyPhase === "block-result" && ["Sem bloqueio","Desviou","Amorteceu","Bloqueio ponto"].map(label => <button key={label} onClick={() => chooseBlock(label)}>{label}</button>)}
             {rallyPhase === "attack-result" && ["Ponto","Defesa","Erro","Bloqueio","Continua"].map(label => <button key={label} onClick={() => chooseAttackResult(label)}>{label}</button>)}
             {rallyPhase === "rally-end" && <button className={smart.primaryDecision} onClick={beginRally}>Novo rally <kbd>Enter</kbd></button>}
@@ -671,7 +694,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
                   <p><b>{profileAttacks.filter(record => record.result === "Bloqueio" && record.direction === "Diagonal").length}</b><span>bloqueios na diagonal</span></p>
                   <p><b>{profileAttacks.filter(record => record.result === "Ponto" && record.direction === "Diagonal").length}</b><span>pontos na diagonal</span></p>
                 </div>
-                <div className={smart.recentAttacks}>{profileAttacks.slice(-5).reverse().map((record,index) => <span key={`${record.zone}-${index}`}><b>{record.technique === "Largada" ? "⌁" : "➜"} Z{record.zone}</b>{record.direction} · {record.result}{!record.reliable ? " · direção ignorada (desvio)" : ""}</span>)}</div>
+                <div className={smart.recentAttacks}>{profileAttacks.slice(-5).reverse().map((record,index) => <span key={`${record.zone}-${record.subzone ?? ""}-${index}`}><b>{record.technique === "Largada" ? "⌁" : "➜"} Z{record.zone}{record.subzone ?? ""}</b>{record.direction} · {record.result}{!record.reliable ? " · direção ignorada (desvio)" : ""}</span>)}</div>
               </section>
             </main>
           </div>
