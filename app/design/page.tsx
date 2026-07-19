@@ -6,7 +6,7 @@ import smart from "./smart.module.css";
 
 type Concept = "arena" | "tactical";
 type View = "command" | "court" | "beach" | "analysis" | "management";
-type RallyPhase = "ready" | "reception-player" | "contact-zone" | "setter-quality" | "attack-player" | "attack-target" | "block-result" | "attack-result" | "defense-player" | "rally-end";
+type RallyPhase = "ready" | "serve-flight" | "reception-player" | "contact-zone" | "setter-quality" | "attack-player" | "attack-target" | "block-result" | "attack-result" | "defense-player" | "rally-end";
 type TeamSide = "home" | "away";
 type RallyEvent = { tag: string; player: string; detail: string; grade: string; team: TeamSide };
 
@@ -171,6 +171,10 @@ function projectPoint(point: CanonicalPoint, team: TeamSide) {
     : { x: 100 - point.x, y: 50 - point.d * 50 };
 }
 
+function servicePoint(team: TeamSide) {
+  return team === "home" ? { x: 84, y: 98 } : { x: 16, y: 2 };
+}
+
 function functionalPoint(role: IndoorRole, slot: number, setterSlot: number, mode: FormationMode, setterTarget?: { x: number; y: number }, team: TeamSide = "home") {
   if (mode === "receive") return projectPoint(receivePresets[setterSlot][role], team);
   if (mode === "rotation") return slotPosition(slot, team);
@@ -179,6 +183,7 @@ function functionalPoint(role: IndoorRole, slot: number, setterSlot: number, mod
   let point: CanonicalPoint;
   if (mode === "defense") {
     if (role === "LIB") point = { x: 20, d: .72 };
+    else if ((role === "M1" || role === "M2") && !isFront) point = { x: 20, d: .72 };
     else if ((role === "P1" || role === "P2") && !isFront) point = { x: 50, d: .70 };
     else if ((role === "OP" || role === "LEV") && !isFront) point = { x: 82, d: .70 };
     else if ((role === "M1" || role === "M2") && isFront) point = { x: 50, d: .05 };
@@ -251,7 +256,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     { n: 22, role: "P2" as const, slot: 5 }, { n: 35, role: "M2" as const, slot: 6 },
   ];
   const attackPhases: RallyPhase[] = ["setter-quality", "attack-player", "attack-target", "block-result", "attack-result"];
-  const receptionPhases: RallyPhase[] = ["ready", "reception-player", "contact-zone"];
+  const receptionPhases: RallyPhase[] = ["ready", "serve-flight", "reception-player", "contact-zone"];
 
   function modeFor(team: TeamSide): FormationMode {
     const receiver = servingTeam === "home" ? "away" : "home";
@@ -265,9 +270,11 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     const mode = modeFor(team);
     return lineup.map(player => {
       const slot = rotatedSlot(player.slot, rotation);
-      const liberoIn = player.role.startsWith("M") && (slot === 1 || slot >= 5);
+      const middleServing = team === servingTeam && player.role.startsWith("M") && slot === 1;
+      const liberoIn = player.role.startsWith("M") && (slot === 1 || slot >= 5) && !middleServing;
       const role: IndoorRole = liberoIn ? "LIB" : player.role;
-      const point = functionalPoint(role, slot, setterSlot, mode, role === "LEV" && team === possession ? passTarget : undefined, team);
+      const isServerAtLine = team === servingTeam && slot === 1 && (rallyPhase === "ready" || rallyPhase === "serve-flight");
+      const point = isServerAtLine ? servicePoint(team) : functionalPoint(role, slot, setterSlot, mode, role === "LEV" && team === possession ? passTarget : undefined, team);
       return { ...player, n: liberoIn ? liberoNumber : player.n, role, baseRole: player.role, slot, ...point };
     });
   }
@@ -292,12 +299,13 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
         .filter(player => player.team === possession && ["P1", "P2", "OP", "M1", "M2"].includes(player.role))
         .map(player => player.n);
   const phaseStep: Record<RallyPhase, string> = {
-    ready: "SAQUE", "reception-player": "RECEPÇÃO", "contact-zone": contactKind === "reception" ? "RECEPÇÃO" : "DEFESA",
+    ready: "SAQUE", "serve-flight": "SAQUE", "reception-player": "RECEPÇÃO", "contact-zone": contactKind === "reception" ? "RECEPÇÃO" : "DEFESA",
     "setter-quality": "LEVANTAMENTO", "attack-player": "OPÇÕES DE ATAQUE", "attack-target": "DIREÇÃO DO ATAQUE",
     "block-result": "TOQUE NO BLOQUEIO", "attack-result": "RESULTADO", "defense-player": "DEFESA", "rally-end": "FIM DO RALLY",
   };
   const prompt: Record<RallyPhase, string> = {
-    ready: beach ? "Pressione Enter para iniciar o saque" : `Recepção 5x1 com LEV na P${setterHomeSlot} · pressione Enter`,
+    ready: beach ? "Pressione Enter para iniciar o saque" : servingTeam === "home" ? `#${serverFor("home")} pronto para sacar na posição 1` : `Recepção 5x1 com LEV na P${setterHomeSlot} · pressione Enter`,
+    "serve-flight": `Saque de #${serverFor(servingTeam)} em andamento · equipe se reposicionando`,
     "reception-player": "Quem recebeu? Toque no atleta",
     "contact-zone": "Onde o passe terminou? Toque em uma das 9 zonas",
     "setter-quality": `Levantador #${setterNumber} aberto automaticamente`,
@@ -330,7 +338,8 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     setPossession(receiverSide);
     setContactKind("reception");
     setEvents([{ tag: "SAQ", player: playerLabel(server), detail: "Saque em jogo", grade: "+", team: servingTeam }]);
-    setRallyPhase("reception-player");
+    setRallyPhase("serve-flight");
+    window.setTimeout(() => setRallyPhase("reception-player"), 850);
   }
 
   function addEvent(event: RallyEvent) {
@@ -448,7 +457,8 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
 
   const selectedPlayer = allPlayers.find(player => player.n === selected);
   const ballAtPass = passTarget && ["setter-quality", "attack-player"].includes(rallyPhase);
-  const ballPosition = ballAtPass ? passTarget : selectedPlayer ? { x: selectedPlayer.x, y: selectedPlayer.y - 5 } : { x: 50, y: 50 };
+  const incomingServe = rallyPhase === "reception-player" && contactKind === "reception";
+  const ballPosition = ballAtPass ? passTarget : incomingServe ? { x: 50, y: servingTeam === "home" ? 25 : 75 } : selectedPlayer ? { x: selectedPlayer.x, y: selectedPlayer.y - 5 } : { x: 50, y: 50 };
   const zoneSide: TeamSide = rallyPhase === "attack-target" ? (possession === "home" ? "away" : "home") : possession;
 
   function cycleHomeRotation(direction: 1 | -1) {
