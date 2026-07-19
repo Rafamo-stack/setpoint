@@ -443,9 +443,17 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
   function zonePoint(zone: number, side: TeamSide) {
     const row = Math.floor((zone - 1) / 3);
     const column = (zone - 1) % 3;
-    const x = [16.7, 50, 83.3][column];
+    const x = side === "home" ? [16.7, 50, 83.3][column] : [83.3, 50, 16.7][column];
     const y = side === "home" ? [58.3, 75, 91.7][row] : [41.7, 25, 8.3][row];
     return { x, y };
+  }
+
+  function displayedZones(side: TeamSide) {
+    return side === "home" ? [1,2,3,4,5,6,7,8,9] : [9,8,7,6,5,4,3,2,1];
+  }
+
+  function displayedSubzones(side: TeamSide) {
+    return side === "home" ? [..."ABCDEFGHI"] : [..."IHGFEDCBA"];
   }
 
   function gradeForZone(zone: number, side: TeamSide) {
@@ -475,9 +483,10 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
 
   function attackDetailPoint(zone: number, subzone: string, side: TeamSide) {
     const center = zonePoint(zone, side);
-    const index = Math.max(0, "ABCDEFGHI".indexOf(subzone));
-    const row = Math.floor(index / 3);
-    const column = index % 3;
+    const logicalIndex = Math.max(0, "ABCDEFGHI".indexOf(subzone));
+    const screenIndex = side === "home" ? logicalIndex : 8 - logicalIndex;
+    const row = Math.floor(screenIndex / 3);
+    const column = screenIndex % 3;
     return { x: center.x + [-11.1,0,11.1][column], y: center.y + [-5.55,0,5.55][row] };
   }
 
@@ -620,10 +629,10 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
             <span className={smart.smartBall} style={{ left: `${ballPosition.x}%`, top: `${ballPosition.y}%` }}>●</span>
             {rallyPhase === "contact-zone" && (
               <div className={`${smart.zonePicker} ${zoneSide === "away" ? smart.zoneTop : smart.zoneBottom}`}>
-                {[1,2,3,4,5,6,7,8,9].map(zone => <button key={zone} className={selectedZone === zone ? smart.zoneSelected : ""} onClick={() => handleZone(zone)} aria-label={`Zona ${zone}`}><b>{zone}</b><small>{gradeForZone(zone, zoneSide).grade === "#" ? "ideal" : ""}</small></button>)}
+                {displayedZones(zoneSide).map(zone => <button key={zone} className={selectedZone === zone ? smart.zoneSelected : ""} onClick={() => handleZone(zone)} aria-label={`Zona ${zone}`}><b>{zone}</b><small>{gradeForZone(zone, zoneSide).grade === "#" ? "ideal" : ""}</small></button>)}
               </div>
             )}
-            {rallyPhase === "attack-target" && <div className={`${smart.detailedZonePicker} ${zoneSide === "away" ? smart.zoneTop : smart.zoneBottom}`}>{[1,2,3,4,5,6,7,8,9].map(zone => <section key={zone}><strong>{zone}</strong><div>{[..."ABCDEFGHI"].map(letter => <button key={letter} onClick={() => chooseAttackSubzone(zone,letter)} aria-label={`Zona ${zone}${letter}`}>{letter}</button>)}</div></section>)}</div>}
+            {rallyPhase === "attack-target" && <div className={`${smart.detailedZonePicker} ${zoneSide === "away" ? smart.zoneTop : smart.zoneBottom}`}>{displayedZones(zoneSide).map(zone => <section key={zone}><strong>{zone}</strong><div>{displayedSubzones(zoneSide).map(letter => <button key={letter} onClick={() => chooseAttackSubzone(zone,letter)} aria-label={`Zona ${zone}${letter}`}>{letter}</button>)}</div></section>)}</div>}
             {!beach && (homeRotation > 0 || awayRotation > 0) && <div key={`${homeRotation}-${awayRotation}`} className={styles.rotationMotion}>↻ Rodízio atualizado · P{setterHomeSlot}</div>}
           </div>
         </main>
