@@ -9,6 +9,11 @@ type View = "command" | "court" | "beach" | "analysis" | "management";
 type RallyPhase = "ready" | "serve-flight" | "reception-player" | "contact-zone" | "setter-quality" | "attack-player" | "attack-target" | "block-result" | "attack-result" | "defense-player" | "rally-end";
 type TeamSide = "home" | "away";
 type RallyEvent = { tag: string; player: string; detail: string; grade: string; team: TeamSide };
+type ServeOrigin = 5 | 6 | 1;
+type AthleteProfile = { n: number; name: string; role: string; team: TeamSide; serveOrigin: ServeOrigin; serveTarget: number; note: string };
+type AttackTechnique = "Ataque" | "Largada" | "Segunda";
+type AttackDirection = "Paralela" | "Diagonal" | "Centro";
+type AttackRecord = { player: number; technique: AttackTechnique; direction: AttackDirection; zone: number; result: string; block: string; reliable: boolean };
 
 const views: Array<{ id: View; label: string; icon: string }> = [
   { id: "command", label: "Central", icon: "⌂" },
@@ -120,6 +125,32 @@ const rosterNames: Record<number, string> = {
   18: "Murilo Alves", 22: "Tomás R.", 24: "Davi Costa", 27: "Enzo Melo", 29: "Nicolas S.", 31: "João Vitor", 35: "Matheus P.", 36: "Pedro Lima",
 };
 
+const initialProfiles: AthleteProfile[] = [
+  { n: 7, name: "Rafael Luz", role: "LEV", team: "home", serveOrigin: 1, serveTarget: 1, note: "Acelera a bola com passe na mão" },
+  { n: 11, name: "Caio Mendes", role: "P1", team: "home", serveOrigin: 1, serveTarget: 5, note: "Na P6, ocupa a Pos1 e saca pela zona 1" },
+  { n: 4, name: "Bruno Reis", role: "M1", team: "home", serveOrigin: 1, serveTarget: 5, note: "Primeiro tempo rápido" },
+  { n: 9, name: "Lucas Prado", role: "OP", team: "home", serveOrigin: 1, serveTarget: 1, note: "Preferência pela diagonal longa" },
+  { n: 2, name: "André Lima", role: "P2", team: "home", serveOrigin: 5, serveTarget: 1, note: "Usa largada curta com frequência" },
+  { n: 15, name: "Igor Nunes", role: "M2", team: "home", serveOrigin: 1, serveTarget: 6, note: "Ataca principalmente à frente" },
+  { n: 18, name: "Murilo Alves", role: "LIB", team: "home", serveOrigin: 1, serveTarget: 6, note: "Responsável principal pela zona 5" },
+  { n: 27, name: "Enzo Melo", role: "LEV", team: "away", serveOrigin: 1, serveTarget: 5, note: "Levantador adversário" },
+  { n: 31, name: "João Vitor", role: "P1", team: "away", serveOrigin: 6, serveTarget: 5, note: "Saque flutuante da 6 para a 5" },
+  { n: 24, name: "Davi Costa", role: "M1", team: "away", serveOrigin: 1, serveTarget: 6, note: "Central adversário" },
+  { n: 29, name: "Nicolas S.", role: "OP", team: "away", serveOrigin: 1, serveTarget: 1, note: "Oposto adversário" },
+  { n: 22, name: "Tomás R.", role: "P2", team: "away", serveOrigin: 5, serveTarget: 1, note: "Ponteiro adversário" },
+  { n: 35, name: "Matheus P.", role: "M2", team: "away", serveOrigin: 1, serveTarget: 5, note: "Central adversário" },
+  { n: 36, name: "Pedro Lima", role: "LIB", team: "away", serveOrigin: 1, serveTarget: 6, note: "Líbero adversário" },
+];
+
+const sampleAttackRecords: AttackRecord[] = [
+  ...Array.from({ length: 4 }, (_, index) => ({ player: 11, technique: "Ataque" as const, direction: "Paralela" as const, zone: 1, result: index < 2 ? "Ponto" : "Defesa", block: "Sem desvio", reliable: true })),
+  ...Array.from({ length: 2 }, () => ({ player: 11, technique: "Largada" as const, direction: "Centro" as const, zone: 5, result: "Defesa", block: "Sem desvio", reliable: true })),
+  { player: 11, technique: "Ataque", direction: "Centro", zone: 5, result: "Erro na rede", block: "Sem desvio", reliable: true },
+  { player: 11, technique: "Ataque", direction: "Diagonal", zone: 7, result: "Bloqueio", block: "Bloqueio ponto", reliable: true },
+  { player: 11, technique: "Ataque", direction: "Diagonal", zone: 7, result: "Ponto", block: "Sem desvio", reliable: true },
+  { player: 11, technique: "Ataque", direction: "Diagonal", zone: 9, result: "Ponto", block: "Sem desvio", reliable: true },
+];
+
 const nextRotationSlot: Record<number, number> = { 1: 6, 6: 5, 5: 4, 4: 3, 3: 2, 2: 1 };
 
 function rotatedSlot(initial: number, steps: number) {
@@ -171,8 +202,9 @@ function projectPoint(point: CanonicalPoint, team: TeamSide) {
     : { x: 100 - point.x, y: 50 - point.d * 50 };
 }
 
-function servicePoint(team: TeamSide) {
-  return team === "home" ? { x: 84, y: 93 } : { x: 16, y: 7 };
+function servicePoint(team: TeamSide, origin: ServeOrigin = 1) {
+  const homeX: Record<ServeOrigin, number> = { 5: 16, 6: 50, 1: 84 };
+  return team === "home" ? { x: homeX[origin], y: 93 } : { x: 100 - homeX[origin], y: 7 };
 }
 
 function functionalPoint(role: IndoorRole, slot: number, setterSlot: number, mode: FormationMode, setterTarget?: { x: number; y: number }, team: TeamSide = "home") {
@@ -243,6 +275,17 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
   const [homeScore, setHomeScore] = useState(beach ? 17 : 12);
   const [awayScore, setAwayScore] = useState(beach ? 16 : 10);
   const [events, setEvents] = useState<RallyEvent[]>([]);
+  const [profiles, setProfiles] = useState<AthleteProfile[]>(initialProfiles);
+  const [rosterOpen, setRosterOpen] = useState(false);
+  const [profileNumber, setProfileNumber] = useState(11);
+  const [attackRecords, setAttackRecords] = useState<AttackRecord[]>(sampleAttackRecords);
+  const [attackTechnique, setAttackTechnique] = useState<AttackTechnique>("Ataque");
+  const [attackBlock, setAttackBlock] = useState("Sem desvio");
+  const [attackZone, setAttackZone] = useState<number | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewWinner, setReviewWinner] = useState<TeamSide>("home");
+  const [reviewSet, setReviewSet] = useState("Boa");
+  const [reviewReason, setReviewReason] = useState("Erro de ataque");
   const setterHomeSlot = rotatedSlot(1, homeRotation);
   const setterAwaySlot = rotatedSlot(1, awayRotation);
   const homeLineup = [
@@ -274,7 +317,8 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
       const liberoIn = player.role.startsWith("M") && (slot === 1 || slot >= 5) && !middleServing;
       const role: IndoorRole = liberoIn ? "LIB" : player.role;
       const isServerAtLine = team === servingTeam && slot === 1 && (rallyPhase === "ready" || rallyPhase === "serve-flight" || rallyPhase === "rally-end");
-      const point = isServerAtLine ? servicePoint(team) : functionalPoint(role, slot, setterSlot, mode, role === "LEV" && team === possession ? passTarget : undefined, team);
+      const serveOrigin = profiles.find(profile => profile.n === player.n)?.serveOrigin ?? 1;
+      const point = isServerAtLine ? servicePoint(team, serveOrigin) : functionalPoint(role, slot, setterSlot, mode, role === "LEV" && team === possession ? passTarget : undefined, team);
       return { ...player, n: liberoIn ? liberoNumber : player.n, role, baseRole: player.role, slot, ...point };
     });
   }
@@ -309,8 +353,8 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     "reception-player": "Quem recebeu? Toque no atleta",
     "contact-zone": "Onde o passe terminou? Toque em uma das 9 zonas",
     "setter-quality": `Levantador #${setterNumber} aberto automaticamente`,
-    "attack-player": "Escolha uma opção de ataque destacada",
-    "attack-target": "Para onde foi o ataque? Escolha a zona",
+    "attack-player": "Toque em quem recebeu a bola · levantador = segunda",
+    "attack-target": `${attackTechnique} de ${playerLabel(selected)} · escolha a direção`,
     "block-result": "A bola tocou no bloqueio?",
     "attack-result": "Qual foi o resultado do ataque?",
     "defense-player": "Quem defendeu? Toque no atleta",
@@ -369,9 +413,14 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
       setRallyPhase("contact-zone");
       return;
     }
-    if (rallyPhase === "attack-player" && player.team === possession && attackOptions.includes(player.n)) {
+    const isSetterChoice = player.n === setterNumber;
+    if (rallyPhase === "attack-player" && player.team === possession && (attackOptions.includes(player.n) || isSetterChoice)) {
       setSelected(player.n);
       setSelectedZone(null);
+      setAttackZone(null);
+      setAttackBlock("Sem desvio");
+      setAttackTechnique(isSetterChoice ? "Segunda" : "Ataque");
+      addEvent({ tag: "LEV", player: playerLabel(setterNumber), detail: isSetterChoice ? "Levantador passou de segunda" : `Levantamento assumido correto para ${playerLabel(player.n)}`, grade: isSetterChoice ? "↗" : "#", team: possession });
       setRallyPhase("attack-target");
     }
   }
@@ -402,10 +451,13 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
       setPassTarget(target);
       addEvent({ tag: contactKind === "reception" ? "REC" : "DEF", player: playerLabel(selected), detail: `${contactKind === "reception" ? "Recepção" : "Defesa"} ${result.label} · Z${zone}`, grade: result.grade, team: possession });
       setSelected(setterNumber);
-      setRallyPhase("setter-quality");
+      setAttackTechnique("Ataque");
+      setAttackBlock("Sem desvio");
+      setRallyPhase("attack-player");
     } else if (rallyPhase === "attack-target") {
-      addEvent({ tag: "ATA", player: playerLabel(selected), detail: `Ataque direcionado para Z${zone}`, grade: "→", team: possession });
-      setRallyPhase("block-result");
+      setAttackZone(zone);
+      addEvent({ tag: "ATA", player: playerLabel(selected), detail: `${attackTechnique} para Z${zone}${attackBlock === "Sem desvio" ? " · trajetória limpa" : ` · ${attackBlock.toLowerCase()}`}`, grade: "→", team: possession });
+      setRallyPhase("attack-result");
     }
   }
 
@@ -429,8 +481,15 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
   }
 
   function chooseAttackResult(kind: string) {
+    if (attackZone) {
+      const attacker = allPlayers.find(player => player.n === selected);
+      const targetX = zonePoint(attackZone, possession === "home" ? "away" : "home").x;
+      const direction: AttackDirection = !attacker || (attacker.x > 34 && attacker.x < 66) ? "Centro" : (attacker.x < 34 && targetX < 34) || (attacker.x > 66 && targetX > 66) ? "Paralela" : "Diagonal";
+      setAttackRecords(value => [...value, { player: selected, technique: attackTechnique, direction, zone: attackZone, result: kind, block: attackBlock, reliable: attackBlock === "Sem desvio" || kind === "Bloqueio" }]);
+    }
     if (kind === "Ponto") return finishRally(possession, "Ponto de ataque");
     if (kind === "Erro") return finishRally(possession === "home" ? "away" : "home", "Erro de ataque adversário");
+    if (kind === "Bloqueio") return finishRally(possession === "home" ? "away" : "home", "Ponto de bloqueio");
     if (kind === "Defesa") {
       setPossession(possession === "home" ? "away" : "home");
       setContactKind("defense");
@@ -442,7 +501,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     if (rallyPhase === "reception-player") return player.team === possession && (beach || player.role === "P1" || player.role === "P2" || player.role === "LIB");
     if (rallyPhase === "defense-player") return player.team === possession;
     if (rallyPhase === "setter-quality") return player.n === setterNumber;
-    if (rallyPhase === "attack-player") return player.team === possession && attackOptions.includes(player.n);
+    if (rallyPhase === "attack-player") return player.team === possession && (attackOptions.includes(player.n) || player.n === setterNumber);
     return false;
   }
 
@@ -474,6 +533,28 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     setEvents([]);
   }
 
+  const selectedProfile = profiles.find(profile => profile.n === profileNumber) ?? profiles[0];
+  const profileAttacks = attackRecords.filter(record => record.player === profileNumber);
+  const directionCount = (direction: AttackDirection) => profileAttacks.filter(record => record.reliable && record.direction === direction).length;
+  const profilePoints = profileAttacks.filter(record => record.result === "Ponto").length;
+
+  function updateProfile(patch: Partial<AthleteProfile>) {
+    setProfiles(value => value.map(profile => profile.n === profileNumber ? { ...profile, ...patch } : profile));
+  }
+
+  function openQuickReview() {
+    setReviewWinner(possession);
+    setReviewSet("Boa");
+    setReviewReason("Erro de ataque");
+    setReviewOpen(true);
+  }
+
+  function confirmQuickReview() {
+    addEvent({ tag: "AJU", player: playerLabel(setterNumber), detail: `Pendência pós-ponto · levantamento ${reviewSet.toLowerCase()} · ${reviewReason}`, grade: reviewSet === "Ruim" ? "-" : "+", team: possession });
+    setReviewOpen(false);
+    finishRally(reviewWinner, reviewReason);
+  }
+
   function submitCommand() {
     const value = command.trim();
     if (!value) return;
@@ -489,6 +570,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
         <div className={`${styles.simpleTeam} ${styles.simpleAway}`}><b>{awayScore}</b><span>{awayLabel}<small>{beach ? "Ordem 2" : `Levantador P${setterAwaySlot}`}</small></span><i className={styles.awaySwatch} /></div>
         <nav className={styles.simpleTools}>
           {!beach && <><button onClick={() => cycleHomeRotation(-1)} aria-label="Rodízio anterior">‹</button><button onClick={() => cycleHomeRotation(1)}>↻ Próxima · LEV P{setterHomeSlot}</button></>}
+          {!beach && <button onClick={() => setRosterOpen(true)}>☷ Relação nominal</button>}
           <button onClick={() => setAdvanced(value => !value)}>{advanced ? "Ocultar detalhes" : "Mais detalhes"}</button>
           <button className={styles.fullscreenButton} onClick={() => setFullscreen(value => !value)}>{fullscreen ? "× Sair" : "⛶ Tela cheia"}</button>
         </nav>
@@ -532,9 +614,11 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
           <div className={smart.decisionButtons}>
             {rallyPhase === "ready" && <button className={smart.primaryDecision} onClick={beginRally}>▶ Iniciar saque <kbd>Enter</kbd></button>}
             {rallyPhase === "setter-quality" && [["-","Ruim"],["+","Boa"],["#","Perfeita"],["↗","Segunda"]].map(([grade,label]) => <button key={label} onClick={() => chooseSet(grade,label)}><b>{grade}</b>{label}</button>)}
+            {rallyPhase === "attack-target" && <><button className={attackTechnique === "Ataque" ? smart.primaryDecision : ""} onClick={() => setAttackTechnique("Ataque")}>Ataque</button><button className={attackTechnique === "Largada" ? smart.primaryDecision : ""} onClick={() => setAttackTechnique("Largada")}>Largada</button><button className={attackBlock === "Desviou" ? smart.primaryDecision : ""} onClick={() => setAttackBlock(value => value === "Desviou" ? "Sem desvio" : "Desviou")}>{attackBlock === "Desviou" ? "✓ Desviou" : "Sem desvio"}</button></>}
             {rallyPhase === "block-result" && ["Sem bloqueio","Desviou","Amorteceu","Bloqueio ponto"].map(label => <button key={label} onClick={() => chooseBlock(label)}>{label}</button>)}
-            {rallyPhase === "attack-result" && ["Ponto","Defesa","Erro","Continua"].map(label => <button key={label} onClick={() => chooseAttackResult(label)}>{label}</button>)}
+            {rallyPhase === "attack-result" && ["Ponto","Defesa","Erro","Bloqueio","Continua"].map(label => <button key={label} onClick={() => chooseAttackResult(label)}>{label}</button>)}
             {rallyPhase === "rally-end" && <button className={smart.primaryDecision} onClick={beginRally}>Novo rally <kbd>Enter</kbd></button>}
+            {!['ready','serve-flight','rally-end'].includes(rallyPhase) && <button className={smart.endPointButton} onClick={openQuickReview}>■ Fim do ponto</button>}
           </div>
         </div>
         <div className={smart.flowRail}><span className={events.some(event => event.tag === "SAQ") ? smart.flowDone : ""}>Saque</span><i>›</i><span className={events.some(event => event.tag === "REC" || event.tag === "DEF") ? smart.flowDone : ""}>Passe</span><i>›</i><span className={events.some(event => event.tag === "LEV") ? smart.flowDone : ""}>Levantamento</span><i>›</i><span className={events.some(event => event.tag === "ATA") ? smart.flowDone : ""}>Ataque</span></div>
@@ -548,6 +632,37 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
         </div>
         <div className={styles.commandSuggestions}><button onClick={() => setCommand("31 rec +")}>31 rec +</button><button onClick={() => setCommand("9 ataque #")}>9 ataque #</button><button onClick={() => setCommand("ponto nosso")}>ponto nosso</button></div>
       </div>
+
+      {rosterOpen && <div className={smart.modalBackdrop} onClick={() => setRosterOpen(false)}>
+        <section className={smart.rosterModal} onClick={event => event.stopPropagation()}>
+          <header><div><span>RELAÇÃO NOMINAL</span><h2>Perfis e tendências dos atletas</h2></div><button onClick={() => setRosterOpen(false)}>×</button></header>
+          <div className={smart.rosterWorkspace}>
+            <aside>{profiles.map(profile => <button key={profile.n} className={profile.n === profileNumber ? smart.profileActive : ""} onClick={() => setProfileNumber(profile.n)}><b>#{profile.n}</b><span>{profile.name}<small>{profile.team === "home" ? homeLabel : awayLabel} · {profile.role}</small></span></button>)}</aside>
+            <main>
+              <div className={smart.profileHeading}><span className={styles.consoleAvatar}><i /><b>{selectedProfile.n}</b></span><div><small>{selectedProfile.role}</small><h3>{selectedProfile.name}</h3><p>{selectedProfile.note}</p></div></div>
+              <div className={smart.profileFields}>
+                <label>Origem do saque<select value={selectedProfile.serveOrigin} onChange={event => updateProfile({ serveOrigin: Number(event.target.value) as ServeOrigin })}><option value={5}>Zona 5</option><option value={6}>Zona 6</option><option value={1}>Zona 1</option></select></label>
+                <label>Alvo preferido<select value={selectedProfile.serveTarget} onChange={event => updateProfile({ serveTarget: Number(event.target.value) })}>{[1,2,3,4,5,6,7,8,9].map(zone => <option key={zone} value={zone}>Zona {zone}</option>)}</select></label>
+                <label className={smart.noteField}>Características<input value={selectedProfile.note} onChange={event => updateProfile({ note: event.target.value })} /></label>
+              </div>
+              <section className={smart.athleteReport}>
+                <header><div><span>RELATÓRIO INDIVIDUAL</span><h3>Mapa de ataque · {profileAttacks.length} bolas</h3></div><strong>{profilePoints} pontos</strong></header>
+                <div className={smart.directionMap}><div><i style={{ width: `${profileAttacks.length ? directionCount("Paralela") / profileAttacks.length * 100 : 0}%` }} /><b>↑ Paralela</b><span>{directionCount("Paralela")}</span></div><div><i style={{ width: `${profileAttacks.length ? directionCount("Diagonal") / profileAttacks.length * 100 : 0}%` }} /><b>↗ Diagonal</b><span>{directionCount("Diagonal")}</span></div><div><i style={{ width: `${profileAttacks.length ? directionCount("Centro") / profileAttacks.length * 100 : 0}%` }} /><b>· Centro</b><span>{directionCount("Centro")}</span></div></div>
+                <div className={smart.reportFacts}>
+                  <p><b>{directionCount("Paralela")}</b><span>ataques na paralela</span></p>
+                  <p><b>{profileAttacks.filter(record => record.technique === "Largada").length}</b><span>largadas</span></p>
+                  <p><b>{profileAttacks.filter(record => record.result === "Erro na rede").length}</b><span>erros na rede</span></p>
+                  <p><b>{profileAttacks.filter(record => record.result === "Bloqueio" && record.direction === "Diagonal").length}</b><span>bloqueios na diagonal</span></p>
+                  <p><b>{profileAttacks.filter(record => record.result === "Ponto" && record.direction === "Diagonal").length}</b><span>pontos na diagonal</span></p>
+                </div>
+                <div className={smart.recentAttacks}>{profileAttacks.slice(-5).reverse().map((record,index) => <span key={`${record.zone}-${index}`}><b>{record.technique === "Largada" ? "⌁" : "➜"} Z{record.zone}</b>{record.direction} · {record.result}{!record.reliable ? " · direção ignorada (desvio)" : ""}</span>)}</div>
+              </section>
+            </main>
+          </div>
+        </section>
+      </div>}
+
+      {reviewOpen && <div className={smart.modalBackdrop} onClick={() => setReviewOpen(false)}><section className={smart.reviewModal} onClick={event => event.stopPropagation()}><header><div><span>REVISÃO PÓS-PONTO</span><h2>Complete só o que ficou pendente</h2></div><button onClick={() => setReviewOpen(false)}>×</button></header><label>Quem ganhou?<div><button className={reviewWinner === "home" ? smart.choiceActive : ""} onClick={() => setReviewWinner("home")}>{homeLabel}</button><button className={reviewWinner === "away" ? smart.choiceActive : ""} onClick={() => setReviewWinner("away")}>{awayLabel}</button></div></label><label>Levantamento<div>{["Boa","Ruim","Não houve"].map(value => <button key={value} className={reviewSet === value ? smart.choiceActive : ""} onClick={() => setReviewSet(value)}>{value}</button>)}</div></label><label>Motivo do fim<div>{["Erro de ataque","Erro de saque","Bloqueio","Bola no chão"].map(value => <button key={value} className={reviewReason === value ? smart.choiceActive : ""} onClick={() => setReviewReason(value)}>{value}</button>)}</div></label><button className={smart.confirmReview} onClick={confirmQuickReview}>Confirmar e fechar o ponto</button></section></div>}
     </section>
   );
 }
