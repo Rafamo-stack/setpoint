@@ -6,7 +6,7 @@ import smart from "./smart.module.css";
 
 type Concept = "arena" | "tactical";
 type View = "command" | "court" | "beach" | "analysis" | "management";
-type RallyPhase = "ready" | "serve-flight" | "reception-player" | "contact-zone" | "setter-quality" | "attack-player" | "attack-target" | "block-result" | "attack-result" | "defense-player" | "rally-end";
+type RallyPhase = "ready" | "serve-flight" | "reception-player" | "contact-zone" | "setter-quality" | "setter-player" | "attack-player" | "attack-target" | "block-result" | "attack-result" | "defense-player" | "rally-end";
 type TeamSide = "home" | "away";
 type RallyEvent = { tag: string; player: string; detail: string; grade: string; team: TeamSide };
 type ServeOrigin = 5 | 6 | 1;
@@ -14,7 +14,8 @@ type AthleteProfile = { n: number; name: string; role: string; team: TeamSide; s
 type AttackTechnique = "Ataque" | "Largada" | "Segunda";
 type AttackDirection = "Paralela" | "Diagonal" | "Centro";
 type AttackRecord = { player: number; technique: AttackTechnique; direction: AttackDirection; zone: number; subzone?: string; result: string; block: string; reliable: boolean };
-type PendingSet = { id: number; setter: number; team: TeamSide; attacker: number; quality: "Boa" | "Ruim" };
+type SetTempo = "1º tempo" | "2º tempo" | "3º tempo";
+type PendingSet = { id: number; setter: number; team: TeamSide; attacker: number; destination: string; quality: "Boa" | "Ruim"; tempo: SetTempo };
 
 const views: Array<{ id: View; label: string; icon: string }> = [
   { id: "command", label: "Central", icon: "⌂" },
@@ -211,6 +212,7 @@ function servicePoint(team: TeamSide, origin: ServeOrigin = 1) {
 function functionalPoint(role: IndoorRole, slot: number, setterSlot: number, mode: FormationMode, setterTarget?: { x: number; y: number }, team: TeamSide = "home") {
   if (mode === "receive") return projectPoint(receivePresets[setterSlot][role], team);
   if (mode === "rotation") return slotPosition(slot, team);
+  if (mode === "attack" && setterTarget) return setterTarget;
 
   const isFront = slot >= 2 && slot <= 4;
   let point: CanonicalPoint;
@@ -224,7 +226,7 @@ function functionalPoint(role: IndoorRole, slot: number, setterSlot: number, mod
     else if (role === "OP" && isFront) point = { x: setterSlot === 1 ? 9 : 91, d: .07 };
     else point = { x: 84, d: .09 };
   } else {
-    if (role === "LEV") return setterTarget ?? projectPoint({ x: 66, d: .08 }, team);
+    if (role === "LEV") return projectPoint({ x: 66, d: .08 }, team);
     if (role === "LIB") point = { x: 22, d: .78 };
     else if (role === "M1" || role === "M2") point = { x: 42, d: .06 };
     else if ((role === "P1" || role === "P2") && isFront) point = { x: setterSlot === 1 ? 91 : 9, d: .10 };
@@ -289,6 +291,8 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
   const [reviewWinner, setReviewWinner] = useState<TeamSide>("home");
   const [reviewReason, setReviewReason] = useState("Erro de ataque");
   const [pendingSets, setPendingSets] = useState<PendingSet[]>([]);
+  const [emergencySetter, setEmergencySetter] = useState<number | null>(null);
+  const [reviewFaultTeam, setReviewFaultTeam] = useState<TeamSide>("home");
   const setterHomeSlot = rotatedSlot(1, homeRotation);
   const setterAwaySlot = rotatedSlot(1, awayRotation);
   const homeLineup = [
@@ -301,7 +305,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     { n: 24, role: "M1" as const, slot: 3 }, { n: 29, role: "OP" as const, slot: 4 },
     { n: 22, role: "P2" as const, slot: 5 }, { n: 35, role: "M2" as const, slot: 6 },
   ];
-  const attackPhases: RallyPhase[] = ["setter-quality", "attack-player", "attack-target", "block-result", "attack-result"];
+  const attackPhases: RallyPhase[] = ["setter-quality", "setter-player", "attack-player", "attack-target", "block-result", "attack-result"];
   const receptionPhases: RallyPhase[] = ["ready", "serve-flight", "reception-player", "contact-zone"];
 
   function modeFor(team: TeamSide): FormationMode {
@@ -321,7 +325,8 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
       const role: IndoorRole = liberoIn ? "LIB" : player.role;
       const isServerAtLine = team === servingTeam && slot === 1 && (rallyPhase === "ready" || rallyPhase === "serve-flight" || rallyPhase === "rally-end");
       const serveOrigin = profiles.find(profile => profile.n === player.n)?.serveOrigin ?? 1;
-      const point = isServerAtLine ? servicePoint(team, serveOrigin) : functionalPoint(role, slot, setterSlot, mode, role === "LEV" ? setterTargets[team] : undefined, team);
+      const targetSetter = emergencySetter ?? (team === "home" ? 7 : 27);
+      const point = isServerAtLine ? servicePoint(team, serveOrigin) : functionalPoint(role, slot, setterSlot, mode, team === possession && player.n === targetSetter ? setterTargets[team] : undefined, team);
       return { ...player, n: liberoIn ? liberoNumber : player.n, role, baseRole: player.role, slot, ...point };
     });
   }
@@ -340,6 +345,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
   const setterNumber = beach
     ? (possession === "home" ? (beachAttacker === 3 ? 12 : 3) : (beachAttacker === 8 ? 14 : 8))
     : (possession === "home" ? 7 : 27);
+  const effectiveSetterNumber = emergencySetter ?? setterNumber;
   const attackOptions = beach
     ? [beachAttacker]
     : allPlayers
@@ -347,7 +353,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
         .map(player => player.n);
   const phaseStep: Record<RallyPhase, string> = {
     ready: "SAQUE", "serve-flight": "SAQUE", "reception-player": "RECEPÇÃO", "contact-zone": contactKind === "reception" ? "RECEPÇÃO" : "DEFESA",
-    "setter-quality": "LEVANTAMENTO", "attack-player": "OPÇÕES DE ATAQUE", "attack-target": "DIREÇÃO DO ATAQUE",
+    "setter-quality": "LEVANTAMENTO", "setter-player": "SEGUNDO TOQUE", "attack-player": "OPÇÕES DE ATAQUE", "attack-target": "DIREÇÃO DO ATAQUE",
     "block-result": "TOQUE NO BLOQUEIO", "attack-result": "RESULTADO", "defense-player": "DEFESA", "rally-end": "FIM DO RALLY",
   };
   const prompt: Record<RallyPhase, string> = {
@@ -356,6 +362,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     "reception-player": "Quem recebeu? Toque no atleta",
     "contact-zone": "Onde o passe terminou? Toque em uma das 9 zonas",
     "setter-quality": `Levantador #${setterNumber} aberto automaticamente`,
+    "setter-player": `Levantador #${setterNumber} defendeu · quem fez o levantamento?`,
     "attack-player": "Toque em quem recebeu a bola · levantador = segunda",
     "attack-target": `${attackTechnique} de ${playerLabel(selected)} · escolha a direção`,
     "block-result": "A bola tocou no bloqueio?",
@@ -386,6 +393,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     setAttackSubzone(null);
     setSetterTargets({});
     setPendingSets([]);
+    setEmergencySetter(null);
     setPossession(receiverSide);
     setContactKind("reception");
     setEvents([{ tag: "SAQ", player: playerLabel(server), detail: "Saque em jogo", grade: "+", team: servingTeam }]);
@@ -397,10 +405,11 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     setEvents(value => [...value, event]);
   }
 
-  function requestRallyEnd(side: TeamSide, detail: string) {
+  function requestRallyEnd(side: TeamSide, detail: string, faultTeam: TeamSide = side === "home" ? "away" : "home") {
     setWinner(side);
     setReviewWinner(side);
     setReviewReason(detail);
+    setReviewFaultTeam(faultTeam);
     setReviewOpen(true);
   }
 
@@ -426,7 +435,14 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
       setRallyPhase("contact-zone");
       return;
     }
-    const isSetterChoice = player.n === setterNumber;
+    if (rallyPhase === "setter-player" && player.team === possession && player.n !== setterNumber) {
+      setEmergencySetter(player.n);
+      setSelected(player.n);
+      addEvent({ tag: "LEV", player: playerLabel(player.n), detail: `Assumiu o segundo toque após defesa de ${playerLabel(setterNumber)}`, grade: "!", team: possession });
+      setRallyPhase("attack-player");
+      return;
+    }
+    const isSetterChoice = player.n === effectiveSetterNumber;
     if (rallyPhase === "attack-player" && player.team === possession && (attackOptions.includes(player.n) || isSetterChoice)) {
       setSelected(player.n);
       setSelectedZone(null);
@@ -434,8 +450,9 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
       setAttackSubzone(null);
       setAttackBlock("Sem desvio");
       setAttackTechnique(isSetterChoice ? "Segunda" : "Ataque");
-      addEvent({ tag: "LEV", player: playerLabel(setterNumber), detail: isSetterChoice ? "Levantador passou de segunda" : `Levantamento assumido correto para ${playerLabel(player.n)}`, grade: isSetterChoice ? "↗" : "#", team: possession });
-      if (!isSetterChoice) setPendingSets(value => [...value, { id: Date.now() + value.length, setter: setterNumber, team: possession, attacker: player.n, quality: "Boa" }]);
+      const destination = player.role === "M1" || player.role === "M2" ? "Meio" : player.role === "OP" ? (player.slot >= 2 && player.slot <= 4 ? "Saída" : "Fundo 1") : (player.slot >= 2 && player.slot <= 4 ? "Ponta" : "Fundo 6");
+      addEvent({ tag: "LEV", player: playerLabel(effectiveSetterNumber), detail: isSetterChoice ? "Segundo toque atacado" : `Levantamento assumido correto para ${playerLabel(player.n)} · ${destination}`, grade: isSetterChoice ? "↗" : "#", team: possession });
+      if (!isSetterChoice) setPendingSets(value => [...value, { id: Date.now() + value.length, setter: effectiveSetterNumber, team: possession, attacker: player.n, destination, quality: "Boa", tempo: destination === "Meio" ? "1º tempo" : "2º tempo" }]);
       setRallyPhase("attack-target");
     }
   }
@@ -474,10 +491,15 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
       setPassTarget(target);
       setSetterTargets(value => ({ ...value, [possession]: target }));
       addEvent({ tag: contactKind === "reception" ? "REC" : "DEF", player: playerLabel(selected), detail: `${contactKind === "reception" ? "Recepção" : "Defesa"} ${result.label} · Z${zone}`, grade: result.grade, team: possession });
-      setSelected(setterNumber);
       setAttackTechnique("Ataque");
       setAttackBlock("Sem desvio");
-      setRallyPhase("attack-player");
+      const setterDefended = contactKind === "defense" && selected === setterNumber;
+      setEmergencySetter(null);
+      if (setterDefended) setRallyPhase("setter-player");
+      else {
+        setSelected(setterNumber);
+        setRallyPhase("attack-player");
+      }
     }
   }
 
@@ -528,6 +550,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     if (kind === "Bloqueio") return requestRallyEnd(possession === "home" ? "away" : "home", "Bloqueio");
     if (kind === "Defesa") {
       setPossession(possession === "home" ? "away" : "home");
+      setEmergencySetter(null);
       setContactKind("defense");
       setRallyPhase("defense-player");
     } else setRallyPhase("attack-player");
@@ -537,7 +560,8 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     if (rallyPhase === "reception-player") return player.team === possession && (beach || player.role === "P1" || player.role === "P2" || player.role === "LIB");
     if (rallyPhase === "defense-player") return player.team === possession;
     if (rallyPhase === "setter-quality") return player.n === setterNumber;
-    if (rallyPhase === "attack-player") return player.team === possession && (attackOptions.includes(player.n) || player.n === setterNumber);
+    if (rallyPhase === "setter-player") return player.team === possession && player.n !== setterNumber;
+    if (rallyPhase === "attack-player") return player.team === possession && (attackOptions.includes(player.n) || player.n === effectiveSetterNumber);
     return false;
   }
 
@@ -567,6 +591,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     setSelectedZone(null);
     setPassTarget(undefined);
     setSetterTargets({});
+    setEmergencySetter(null);
     setWinner(null);
     setEvents([]);
   }
@@ -581,19 +606,47 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
   }
 
   function openQuickReview() {
-    setReviewWinner(possession);
-    setReviewReason("Erro de ataque");
+    const other = (team: TeamSide): TeamSide => team === "home" ? "away" : "home";
+    let reason = "Erro de ataque";
+    let faultTeam = possession;
+    let inferredWinner = other(possession);
+    if (rallyPhase === "reception-player") {
+      reason = "Erro de saque";
+      faultTeam = servingTeam;
+      inferredWinner = other(servingTeam);
+    } else if (rallyPhase === "contact-zone" && contactKind === "reception") {
+      reason = "Erro de recepção";
+      inferredWinner = servingTeam;
+    } else if (rallyPhase === "setter-player" || rallyPhase === "attack-player" || rallyPhase === "setter-quality") {
+      reason = "Erro de levantamento";
+    } else if (rallyPhase === "defense-player" || (rallyPhase === "contact-zone" && contactKind === "defense")) {
+      reason = "Erro de defesa";
+    }
+    setReviewFaultTeam(faultTeam);
+    setReviewWinner(inferredWinner);
+    setReviewReason(reason);
     setReviewOpen(true);
   }
 
   function confirmQuickReview() {
-    pendingSets.forEach(set => addEvent({ tag: "AJU", player: playerLabel(set.setter), detail: `Levantamento ${set.quality.toLowerCase()} para ${playerLabel(set.attacker)}`, grade: set.quality === "Ruim" ? "-" : "+", team: set.team }));
+    pendingSets.forEach(set => addEvent({ tag: "AJU", player: playerLabel(set.setter), detail: `Levantamento ${set.quality.toLowerCase()} · ${set.tempo} · ${set.destination} para ${playerLabel(set.attacker)}`, grade: set.quality === "Ruim" ? "-" : "+", team: set.team }));
     setReviewOpen(false);
     finalizeRally(reviewWinner, reviewReason);
   }
 
   function updatePendingSet(id: number, quality: "Boa" | "Ruim") {
     setPendingSets(value => value.map(set => set.id === id ? { ...set, quality } : set));
+  }
+
+  function updatePendingTempo(id: number, tempo: SetTempo) {
+    setPendingSets(value => value.map(set => set.id === id ? { ...set, tempo } : set));
+  }
+
+  function chooseReviewReason(reason: string) {
+    setReviewReason(reason);
+    if (reason === "Erro de saque") setReviewWinner(servingTeam === "home" ? "away" : "home");
+    else if (reason === "Erro de recepção") setReviewWinner(servingTeam);
+    else if (reason !== "Bola no chão") setReviewWinner(reviewFaultTeam === "home" ? "away" : "home");
   }
 
   function submitCommand() {
@@ -704,7 +757,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
         </section>
       </div>}
 
-      {reviewOpen && <div className={smart.modalBackdrop}><section className={smart.reviewModal} onClick={event => event.stopPropagation()}><header><div><span>REVISÃO PÓS-PONTO</span><h2>Complete o que ficou pendente no rally</h2></div></header><label>Quem ganhou?<div><button className={reviewWinner === "home" ? smart.choiceActive : ""} onClick={() => setReviewWinner("home")}>{homeLabel}</button><button className={reviewWinner === "away" ? smart.choiceActive : ""} onClick={() => setReviewWinner("away")}>{awayLabel}</button></div></label><div className={smart.pendingSetList}><strong>Levantamentos do rally · {pendingSets.length}</strong>{pendingSets.length === 0 ? <p>Nenhum levantamento ficou pendente.</p> : pendingSets.map((set,index) => <article key={set.id}><span><b>{index + 1}. {playerLabel(set.setter)}</b><small>para {playerLabel(set.attacker)} · {set.team === "home" ? homeLabel : awayLabel}</small></span><div><button className={set.quality === "Boa" ? smart.choiceActive : ""} onClick={() => updatePendingSet(set.id,"Boa")}>Boa</button><button className={set.quality === "Ruim" ? smart.choiceActive : ""} onClick={() => updatePendingSet(set.id,"Ruim")}>Ruim</button></div></article>)}</div><label>Motivo do fim<div>{["Erro de ataque","Erro de saque","Bloqueio","Bola no chão"].map(value => <button key={value} className={reviewReason === value ? smart.choiceActive : ""} onClick={() => setReviewReason(value)}>{value}</button>)}</div></label><button className={smart.confirmReview} onClick={confirmQuickReview}>Confirmar e preparar o próximo saque</button></section></div>}
+      {reviewOpen && <div className={smart.modalBackdrop}><section className={smart.reviewModal} onClick={event => event.stopPropagation()}><header><div><span>REVISÃO PÓS-PONTO</span><h2>Confirme apenas o que não foi marcado</h2></div></header><div className={smart.inferredOutcome}><span>O sistema identificou</span><strong>{reviewReason}</strong><small>O ponto e o próximo sacador serão definidos automaticamente.</small></div><div className={smart.pendingSetList}><strong>Levantamentos do rally · {pendingSets.length}</strong>{pendingSets.length === 0 ? <p>Nenhum levantamento ficou pendente.</p> : pendingSets.map((set,index) => <article key={set.id}><span><b>{index + 1}. {playerLabel(set.setter)} → {playerLabel(set.attacker)}</b><small>{set.destination} · {set.team === "home" ? homeLabel : awayLabel}</small></span><div className={smart.setChecks}><div><small>Qualidade</small><button className={set.quality === "Boa" ? smart.choiceActive : ""} onClick={() => updatePendingSet(set.id,"Boa")}>Boa</button><button className={set.quality === "Ruim" ? smart.choiceActive : ""} onClick={() => updatePendingSet(set.id,"Ruim")}>Ruim</button></div><div><small>Tempo</small>{(["1º tempo","2º tempo","3º tempo"] as SetTempo[]).map(tempo => <button key={tempo} className={set.tempo === tempo ? smart.choiceActive : ""} onClick={() => updatePendingTempo(set.id,tempo)}>{tempo.replace(" tempo","")}</button>)}</div></div></article>)}</div><label>Corrigir identificação, se necessário<div>{["Erro de saque","Erro de recepção","Erro de levantamento","Erro de ataque","Erro de defesa","Bloqueio","Bola no chão"].map(value => <button key={value} className={reviewReason === value ? smart.choiceActive : ""} onClick={() => chooseReviewReason(value)}>{value}</button>)}</div></label><button className={smart.confirmReview} onClick={confirmQuickReview}>Confirmar pendências e preparar o saque</button></section></div>}
     </section>
   );
 }
