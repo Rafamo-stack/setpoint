@@ -117,7 +117,7 @@ function CourtToken({ number, role, x, y, team, active, suggested, onClick }: { 
 
 const rosterNames: Record<number, string> = {
   2: "André Lima", 4: "Bruno Reis", 7: "Rafael Luz", 9: "Lucas Prado", 11: "Caio Mendes", 15: "Igor Nunes",
-  22: "Tomás R.", 24: "Davi Costa", 27: "Enzo Melo", 29: "Nicolas S.", 31: "João Vitor", 35: "Matheus P.",
+  18: "Murilo Alves", 22: "Tomás R.", 24: "Davi Costa", 27: "Enzo Melo", 29: "Nicolas S.", 31: "João Vitor", 35: "Matheus P.", 36: "Pedro Lima",
 };
 
 const nextRotationSlot: Record<number, number> = { 1: 6, 6: 5, 5: 4, 4: 3, 3: 2, 2: 1 };
@@ -140,6 +140,85 @@ function slotPosition(slot: number, team: "home" | "away") {
   return team === "home" ? home[slot] : away[slot];
 }
 
+type IndoorRole = "LEV" | "OP" | "P1" | "P2" | "M1" | "M2" | "LIB";
+type FormationMode = "receive" | "defense" | "attack" | "rotation";
+type CanonicalPoint = { x: number; d: number };
+
+const rotationStepsBySetterSlot: Record<number, number> = { 1: 0, 6: 1, 5: 2, 4: 3, 3: 4, 2: 5 };
+const initialRoleSlots: Record<Exclude<IndoorRole, "LIB">, number> = { LEV: 1, P1: 2, M1: 3, OP: 4, P2: 5, M2: 6 };
+
+const receivePresets: Record<number, Record<IndoorRole, CanonicalPoint>> = {
+  1: { LEV:{x:88,d:.88}, OP:{x:13,d:.10}, P1:{x:78,d:.65}, P2:{x:20,d:.66}, M1:{x:32,d:.16}, M2:{x:50,d:.20}, LIB:{x:50,d:.76} },
+  6: { LEV:{x:70,d:.25}, OP:{x:77,d:.08}, P1:{x:82,d:.67}, P2:{x:18,d:.64}, M1:{x:89,d:.16}, M2:{x:50,d:.20}, LIB:{x:49,d:.75} },
+  5: { LEV:{x:25,d:.24}, OP:{x:90,d:.10}, P1:{x:51,d:.72}, P2:{x:20,d:.60}, M1:{x:50,d:.20}, M2:{x:9,d:.13}, LIB:{x:79,d:.64} },
+  4: { LEV:{x:9,d:.08}, OP:{x:88,d:.90}, P1:{x:49,d:.72}, P2:{x:19,d:.59}, M1:{x:50,d:.20}, M2:{x:14,d:.24}, LIB:{x:79,d:.64} },
+  3: { LEV:{x:60,d:.08}, OP:{x:64,d:.91}, P1:{x:18,d:.60}, P2:{x:82,d:.63}, M1:{x:50,d:.20}, M2:{x:90,d:.16}, LIB:{x:47,d:.69} },
+  2: { LEV:{x:86,d:.08}, OP:{x:35,d:.91}, P1:{x:19,d:.60}, P2:{x:51,d:.68}, M1:{x:10,d:.15}, M2:{x:50,d:.20}, LIB:{x:80,d:.63} },
+};
+
+function roleSlot(role: Exclude<IndoorRole, "LIB">, setterSlot: number) {
+  return rotatedSlot(initialRoleSlots[role], rotationStepsBySetterSlot[setterSlot]);
+}
+
+function visibleRole(role: Exclude<IndoorRole, "LIB">, setterSlot: number): IndoorRole {
+  const slot = roleSlot(role, setterSlot);
+  return role.startsWith("M") && (slot === 1 || slot >= 5) ? "LIB" : role;
+}
+
+function projectPoint(point: CanonicalPoint, team: TeamSide) {
+  return team === "home"
+    ? { x: point.x, y: 50 + point.d * 50 }
+    : { x: 100 - point.x, y: 50 - point.d * 50 };
+}
+
+function functionalPoint(role: IndoorRole, slot: number, setterSlot: number, mode: FormationMode, setterTarget?: { x: number; y: number }, team: TeamSide = "home") {
+  if (mode === "receive") return projectPoint(receivePresets[setterSlot][role], team);
+  if (mode === "rotation") return slotPosition(slot, team);
+
+  const isFront = slot >= 2 && slot <= 4;
+  let point: CanonicalPoint;
+  if (mode === "defense") {
+    if (role === "LIB") point = { x: 20, d: .72 };
+    else if ((role === "P1" || role === "P2") && !isFront) point = { x: 50, d: .70 };
+    else if ((role === "OP" || role === "LEV") && !isFront) point = { x: 82, d: .70 };
+    else if ((role === "M1" || role === "M2") && isFront) point = { x: 50, d: .05 };
+    else if ((role === "P1" || role === "P2") && isFront) point = { x: setterSlot === 1 ? 84 : 16, d: .07 };
+    else if (role === "OP" && isFront) point = { x: setterSlot === 1 ? 16 : 84, d: .07 };
+    else point = { x: 84, d: .09 };
+  } else {
+    if (role === "LEV") return setterTarget ?? projectPoint({ x: 66, d: .08 }, team);
+    if (role === "LIB") point = { x: 22, d: .78 };
+    else if (role === "M1" || role === "M2") point = { x: 50, d: .06 };
+    else if ((role === "P1" || role === "P2") && isFront) point = { x: setterSlot === 1 ? 84 : 16, d: .10 };
+    else if ((role === "P1" || role === "P2") && !isFront) point = { x: 50, d: .62 };
+    else if (role === "OP" && isFront) point = { x: setterSlot === 1 ? 16 : 84, d: .10 };
+    else point = { x: 84, d: .70 };
+  }
+  return projectPoint(point, team);
+}
+
+function validateReceivePreset(setterSlot: number) {
+  const steps = rotationStepsBySetterSlot[setterSlot];
+  const roleAtSlot = new Map<number, IndoorRole>();
+  (Object.keys(initialRoleSlots) as Array<Exclude<IndoorRole, "LIB">>).forEach(role => {
+    const slot = rotatedSlot(initialRoleSlots[role], steps);
+    roleAtSlot.set(slot, visibleRole(role, setterSlot));
+  });
+  const p = (slot: number) => receivePresets[setterSlot][roleAtSlot.get(slot)!];
+  const errors: string[] = [];
+  if (!(p(4).x < p(3).x && p(3).x < p(2).x)) errors.push("ordem lateral da rede");
+  if (!(p(5).x < p(6).x && p(6).x < p(1).x)) errors.push("ordem lateral do fundo");
+  if (!(p(4).d < p(5).d)) errors.push("Pos4/Pos5");
+  if (!(p(3).d < p(6).d)) errors.push("Pos3/Pos6");
+  if (!(p(2).d < p(1).d)) errors.push("Pos2/Pos1");
+  const passers = [receivePresets[setterSlot].P1, receivePresets[setterSlot].P2, receivePresets[setterSlot].LIB];
+  if (passers.some(player => player.d < .55)) errors.push("especialista fora da recepção");
+  return errors;
+}
+
+const rotationAudit = [1,6,5,4,3,2].map(setterSlot => ({ setterSlot, errors: validateReceivePreset(setterSlot) }));
+if (rotationAudit.some(result => result.errors.length)) throw new Error(`Preset 5x1 inválido: ${JSON.stringify(rotationAudit)}`);
+
 function ScoutCockpit({ beach = false }: { beach?: boolean }) {
   const [homeRotation, setHomeRotation] = useState(0);
   const [awayRotation, setAwayRotation] = useState(0);
@@ -151,29 +230,54 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
   const [possession, setPossession] = useState<TeamSide>("away");
   const [contactKind, setContactKind] = useState<"reception" | "defense">("reception");
   const [selectedZone, setSelectedZone] = useState<number | null>(null);
-  const [servingTeam, setServingTeam] = useState<TeamSide>("home");
+  const [servingTeam, setServingTeam] = useState<TeamSide>("away");
   const [winner, setWinner] = useState<TeamSide | null>(null);
   const [beachAttacker, setBeachAttacker] = useState(8);
+  const [selected, setSelected] = useState(beach ? 12 : 27);
+  const [passTarget, setPassTarget] = useState<{ x: number; y: number } | undefined>();
   const [homeScore, setHomeScore] = useState(beach ? 17 : 12);
   const [awayScore, setAwayScore] = useState(beach ? 16 : 10);
   const [events, setEvents] = useState<RallyEvent[]>([]);
-  const setterHomeSlot = rotatedSlot(2, homeRotation);
+  const setterHomeSlot = rotatedSlot(1, homeRotation);
   const setterAwaySlot = rotatedSlot(1, awayRotation);
+  const homeLineup = [
+    { n: 7, role: "LEV" as const, slot: 1 }, { n: 11, role: "P1" as const, slot: 2 },
+    { n: 4, role: "M1" as const, slot: 3 }, { n: 9, role: "OP" as const, slot: 4 },
+    { n: 2, role: "P2" as const, slot: 5 }, { n: 15, role: "M2" as const, slot: 6 },
+  ];
+  const awayLineup = [
+    { n: 27, role: "LEV" as const, slot: 1 }, { n: 31, role: "P1" as const, slot: 2 },
+    { n: 24, role: "M1" as const, slot: 3 }, { n: 29, role: "OP" as const, slot: 4 },
+    { n: 22, role: "P2" as const, slot: 5 }, { n: 35, role: "M2" as const, slot: 6 },
+  ];
+  const attackPhases: RallyPhase[] = ["setter-quality", "attack-player", "attack-target", "block-result", "attack-result"];
+  const receptionPhases: RallyPhase[] = ["ready", "reception-player", "contact-zone"];
+
+  function modeFor(team: TeamSide): FormationMode {
+    const receiver = servingTeam === "home" ? "away" : "home";
+    if (team === possession && attackPhases.includes(rallyPhase)) return "attack";
+    if (team === receiver && receptionPhases.includes(rallyPhase) && contactKind === "reception") return "receive";
+    return "defense";
+  }
+
+  function buildIndoorTeam(team: TeamSide, rotation: number, lineup: typeof homeLineup, liberoNumber: number) {
+    const setterSlot = rotatedSlot(1, rotation);
+    const mode = modeFor(team);
+    return lineup.map(player => {
+      const slot = rotatedSlot(player.slot, rotation);
+      const liberoIn = player.role.startsWith("M") && (slot === 1 || slot >= 5);
+      const role: IndoorRole = liberoIn ? "LIB" : player.role;
+      const point = functionalPoint(role, slot, setterSlot, mode, role === "LEV" && team === possession ? passTarget : undefined, team);
+      return { ...player, n: liberoIn ? liberoNumber : player.n, role, baseRole: player.role, slot, ...point };
+    });
+  }
+
   const teamHome = beach
     ? [{ n: 3, role: "BLOQ", x: 52, y: 69 }, { n: 12, role: "DEF", x: 24, y: 86 }]
-    : [
-        { n: 11, role: "PON", slot: 4 }, { n: 4, role: "CEN", slot: 3 },
-        { n: 7, role: "LEV", slot: 2 }, { n: 15, role: "CEN", slot: 5 },
-        { n: 2, role: "PON", slot: 6 }, { n: 9, role: "OPO", slot: 1 },
-      ].map(player => ({ ...player, ...slotPosition(rotatedSlot(player.slot, homeRotation), "home") }));
+    : buildIndoorTeam("home", homeRotation, homeLineup, 18);
   const teamAway = beach
     ? [{ n: 8, role: "BLOQ", x: 48, y: 31 }, { n: 14, role: "DEF", x: 76, y: 14 }]
-    : [
-        { n: 27, role: "LEV", slot: 1 }, { n: 31, role: "PON", slot: 2 },
-        { n: 24, role: "CEN", slot: 3 }, { n: 29, role: "OPO", slot: 4 },
-        { n: 22, role: "PON", slot: 5 }, { n: 35, role: "LIB", slot: 6 },
-      ].map(player => ({ ...player, ...slotPosition(rotatedSlot(player.slot, awayRotation), "away") }));
-  const [selected, setSelected] = useState(beach ? 12 : 15);
+    : buildIndoorTeam("away", awayRotation, awayLineup, 36);
   const allPlayers = [...teamHome.map(p => ({ ...p, team: "home" as const })), ...teamAway.map(p => ({ ...p, team: "away" as const }))];
   const current = allPlayers.find(p => p.n === selected) ?? allPlayers[0];
   const homeLabel = beach ? "LUNA / BIA" : "SETMATCH";
@@ -182,14 +286,18 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
   const setterNumber = beach
     ? (possession === "home" ? (beachAttacker === 3 ? 12 : 3) : (beachAttacker === 8 ? 14 : 8))
     : (possession === "home" ? 7 : 27);
-  const attackOptions = possession === "home" ? (beach ? [beachAttacker] : [11, 4, 9]) : (beach ? [beachAttacker] : [29, 31, 24]);
+  const attackOptions = beach
+    ? [beachAttacker]
+    : allPlayers
+        .filter(player => player.team === possession && ["P1", "P2", "OP", "M1", "M2"].includes(player.role))
+        .map(player => player.n);
   const phaseStep: Record<RallyPhase, string> = {
     ready: "SAQUE", "reception-player": "RECEPÇÃO", "contact-zone": contactKind === "reception" ? "RECEPÇÃO" : "DEFESA",
     "setter-quality": "LEVANTAMENTO", "attack-player": "OPÇÕES DE ATAQUE", "attack-target": "DIREÇÃO DO ATAQUE",
     "block-result": "TOQUE NO BLOQUEIO", "attack-result": "RESULTADO", "defense-player": "DEFESA", "rally-end": "FIM DO RALLY",
   };
   const prompt: Record<RallyPhase, string> = {
-    ready: "Pressione Enter para iniciar o saque",
+    ready: beach ? "Pressione Enter para iniciar o saque" : `Recepção 5x1 com LEV na P${setterHomeSlot} · pressione Enter`,
     "reception-player": "Quem recebeu? Toque no atleta",
     "contact-zone": "Onde o passe terminou? Toque em uma das 9 zonas",
     "setter-quality": `Levantador #${setterNumber} aberto automaticamente`,
@@ -207,9 +315,9 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
 
   function serverFor(team: TeamSide) {
     if (beach) return team === "home" ? 12 : 14;
-    const source = team === "home" ? teamHome : teamAway;
+    const source = team === "home" ? homeLineup : awayLineup;
     const rotation = team === "home" ? homeRotation : awayRotation;
-    return source.find(player => "slot" in player && rotatedSlot(player.slot, rotation) === 1)?.n ?? (team === "home" ? 9 : 27);
+    return source.find(player => rotatedSlot(player.slot, rotation) === 1)?.n ?? (team === "home" ? 7 : 27);
   }
 
   function beginRally() {
@@ -218,6 +326,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     setWinner(null);
     setSelected(server);
     setSelectedZone(null);
+    setPassTarget(undefined);
     setPossession(receiverSide);
     setContactKind("reception");
     setEvents([{ tag: "SAQ", player: playerLabel(server), detail: "Saque em jogo", grade: "+", team: servingTeam }]);
@@ -243,7 +352,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
   }
 
   function handlePlayerClick(player: typeof allPlayers[number]) {
-    const validReceiver = beach || player.role === "PON" || player.role === "LIB";
+    const validReceiver = beach || player.role === "P1" || player.role === "P2" || player.role === "LIB";
     if (((rallyPhase === "reception-player" && validReceiver) || rallyPhase === "defense-player") && player.team === possession) {
       setSelected(player.n);
       if (beach) setBeachAttacker(player.n);
@@ -258,17 +367,30 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     }
   }
 
-  function gradeForZone(zone: number) {
-    if (zone === 2) return { grade: "#", label: "perfeita" };
-    if ([1, 3, 5].includes(zone)) return { grade: "+", label: "positiva" };
-    if ([4, 6].includes(zone)) return { grade: "!", label: "fora do sistema" };
+  function zonePoint(zone: number, side: TeamSide) {
+    const row = Math.floor((zone - 1) / 3);
+    const column = (zone - 1) % 3;
+    const x = [16.7, 50, 83.3][column];
+    const y = side === "home" ? [58.3, 75, 91.7][row] : [41.7, 25, 8.3][row];
+    return { x, y };
+  }
+
+  function gradeForZone(zone: number, side: TeamSide) {
+    const point = zonePoint(zone, side);
+    const ideal = projectPoint({ x: 66, d: .08 }, side);
+    const distance = Math.hypot(point.x - ideal.x, point.y - ideal.y);
+    if (distance <= 23) return { grade: "#", label: "perfeita" };
+    if (distance <= 39) return { grade: "+", label: "positiva" };
+    if (distance <= 57) return { grade: "!", label: "fora do sistema" };
     return { grade: "-", label: "negativa" };
   }
 
   function handleZone(zone: number) {
     setSelectedZone(zone);
     if (rallyPhase === "contact-zone") {
-      const result = gradeForZone(zone);
+      const target = zonePoint(zone, possession);
+      const result = gradeForZone(zone, possession);
+      setPassTarget(target);
       addEvent({ tag: contactKind === "reception" ? "REC" : "DEF", player: playerLabel(selected), detail: `${contactKind === "reception" ? "Recepção" : "Defesa"} ${result.label} · Z${zone}`, grade: result.grade, team: possession });
       setSelected(setterNumber);
       setRallyPhase("setter-quality");
@@ -308,7 +430,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
   }
 
   function isSuggested(player: typeof allPlayers[number]) {
-    if (rallyPhase === "reception-player") return player.team === possession && (beach || player.role === "PON" || player.role === "LIB");
+    if (rallyPhase === "reception-player") return player.team === possession && (beach || player.role === "P1" || player.role === "P2" || player.role === "LIB");
     if (rallyPhase === "defense-player") return player.team === possession;
     if (rallyPhase === "setter-quality") return player.n === setterNumber;
     if (rallyPhase === "attack-player") return player.team === possession && attackOptions.includes(player.n);
@@ -325,8 +447,22 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
   });
 
   const selectedPlayer = allPlayers.find(player => player.n === selected);
-  const ballPosition = selectedPlayer ? { x: selectedPlayer.x, y: selectedPlayer.y - 5 } : { x: 50, y: 50 };
+  const ballAtPass = passTarget && ["setter-quality", "attack-player"].includes(rallyPhase);
+  const ballPosition = ballAtPass ? passTarget : selectedPlayer ? { x: selectedPlayer.x, y: selectedPlayer.y - 5 } : { x: 50, y: 50 };
   const zoneSide: TeamSide = rallyPhase === "attack-target" ? (possession === "home" ? "away" : "home") : possession;
+
+  function cycleHomeRotation(direction: 1 | -1) {
+    setHomeRotation(value => (value + direction + 6) % 6);
+    setRallyPhase("ready");
+    setServingTeam("away");
+    setPossession("home");
+    setContactKind("reception");
+    setSelected(27);
+    setSelectedZone(null);
+    setPassTarget(undefined);
+    setWinner(null);
+    setEvents([]);
+  }
 
   function submitCommand() {
     const value = command.trim();
@@ -342,7 +478,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
         <div className={styles.setBadge}><span>SET {beach ? 2 : 1}</span><strong>×</strong><small>Rally #{beach ? 41 : 28}</small></div>
         <div className={`${styles.simpleTeam} ${styles.simpleAway}`}><b>{awayScore}</b><span>{awayLabel}<small>{beach ? "Ordem 2" : `Levantador P${setterAwaySlot}`}</small></span><i className={styles.awaySwatch} /></div>
         <nav className={styles.simpleTools}>
-          {!beach && <button onClick={() => setHomeRotation(value => (value + 1) % 6)}>↻ Rodízio</button>}
+          {!beach && <><button onClick={() => cycleHomeRotation(-1)} aria-label="Rodízio anterior">‹</button><button onClick={() => cycleHomeRotation(1)}>↻ Próxima · LEV P{setterHomeSlot}</button></>}
           <button onClick={() => setAdvanced(value => !value)}>{advanced ? "Ocultar detalhes" : "Mais detalhes"}</button>
           <button className={styles.fullscreenButton} onClick={() => setFullscreen(value => !value)}>{fullscreen ? "× Sair" : "⛶ Tela cheia"}</button>
         </nav>
@@ -351,6 +487,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
       <div className={styles.simpleStage}>
         <main className={styles.simpleCourtArea}>
           <div className={styles.simplePrompt}><span>{phaseStep[rallyPhase]}</span><strong>{prompt[rallyPhase]}</strong></div>
+          {!beach && <div className={smart.rotationAudit}><b>5x1 · LEV@P{setterHomeSlot}</b><span>✓ Relações legais</span><small>6/6 formações validadas</small></div>}
           <div className={`${styles.simpleCourt} ${beach ? styles.simpleBeachCourt : ""}`}>
             <div className={styles.courtGrid}>{[1,2,3,4,5,6,7,8,9].map(zone => <span key={zone}>{zone}</span>)}</div>
             <div className={styles.scoutNet}><i /><i /><i /><i /><i /><i /></div>
@@ -359,7 +496,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
             <span className={smart.smartBall} style={{ left: `${ballPosition.x}%`, top: `${ballPosition.y}%` }}>●</span>
             {(rallyPhase === "contact-zone" || rallyPhase === "attack-target") && (
               <div className={`${smart.zonePicker} ${zoneSide === "away" ? smart.zoneTop : smart.zoneBottom}`}>
-                {[1,2,3,4,5,6,7,8,9].map(zone => <button key={zone} className={selectedZone === zone ? smart.zoneSelected : ""} onClick={() => handleZone(zone)} aria-label={`Zona ${zone}`}><b>{zone}</b><small>{zone === 2 ? "ideal" : ""}</small></button>)}
+                {[1,2,3,4,5,6,7,8,9].map(zone => <button key={zone} className={selectedZone === zone ? smart.zoneSelected : ""} onClick={() => handleZone(zone)} aria-label={`Zona ${zone}`}><b>{zone}</b><small>{gradeForZone(zone, zoneSide).grade === "#" ? "ideal" : ""}</small></button>)}
               </div>
             )}
             {!beach && (homeRotation > 0 || awayRotation > 0) && <div key={`${homeRotation}-${awayRotation}`} className={styles.rotationMotion}>↻ Rodízio atualizado · P{setterHomeSlot}</div>}
