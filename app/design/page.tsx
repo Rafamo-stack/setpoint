@@ -14,6 +14,7 @@ type AthleteProfile = { n: number; name: string; role: string; team: TeamSide; s
 type AttackTechnique = "Ataque" | "Largada" | "Segunda";
 type AttackDirection = "Paralela" | "Diagonal" | "Centro";
 type AttackRecord = { player: number; technique: AttackTechnique; direction: AttackDirection; zone: number; result: string; block: string; reliable: boolean };
+type PendingSet = { id: number; setter: number; team: TeamSide; attacker: number; quality: "Boa" | "Ruim" };
 
 const views: Array<{ id: View; label: string; icon: string }> = [
   { id: "command", label: "Central", icon: "⌂" },
@@ -272,6 +273,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
   const [beachAttacker, setBeachAttacker] = useState(8);
   const [selected, setSelected] = useState(beach ? 12 : 27);
   const [passTarget, setPassTarget] = useState<{ x: number; y: number } | undefined>();
+  const [setterTargets, setSetterTargets] = useState<Partial<Record<TeamSide, { x: number; y: number }>>>({});
   const [homeScore, setHomeScore] = useState(beach ? 17 : 12);
   const [awayScore, setAwayScore] = useState(beach ? 16 : 10);
   const [events, setEvents] = useState<RallyEvent[]>([]);
@@ -284,8 +286,8 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
   const [attackZone, setAttackZone] = useState<number | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewWinner, setReviewWinner] = useState<TeamSide>("home");
-  const [reviewSet, setReviewSet] = useState("Boa");
   const [reviewReason, setReviewReason] = useState("Erro de ataque");
+  const [pendingSets, setPendingSets] = useState<PendingSet[]>([]);
   const setterHomeSlot = rotatedSlot(1, homeRotation);
   const setterAwaySlot = rotatedSlot(1, awayRotation);
   const homeLineup = [
@@ -318,7 +320,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
       const role: IndoorRole = liberoIn ? "LIB" : player.role;
       const isServerAtLine = team === servingTeam && slot === 1 && (rallyPhase === "ready" || rallyPhase === "serve-flight" || rallyPhase === "rally-end");
       const serveOrigin = profiles.find(profile => profile.n === player.n)?.serveOrigin ?? 1;
-      const point = isServerAtLine ? servicePoint(team, serveOrigin) : functionalPoint(role, slot, setterSlot, mode, role === "LEV" && team === possession ? passTarget : undefined, team);
+      const point = isServerAtLine ? servicePoint(team, serveOrigin) : functionalPoint(role, slot, setterSlot, mode, role === "LEV" ? setterTargets[team] : undefined, team);
       return { ...player, n: liberoIn ? liberoNumber : player.n, role, baseRole: player.role, slot, ...point };
     });
   }
@@ -379,6 +381,8 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     setSelected(server);
     setSelectedZone(null);
     setPassTarget(undefined);
+    setSetterTargets({});
+    setPendingSets([]);
     setPossession(receiverSide);
     setContactKind("reception");
     setEvents([{ tag: "SAQ", player: playerLabel(server), detail: "Saque em jogo", grade: "+", team: servingTeam }]);
@@ -390,8 +394,14 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     setEvents(value => [...value, event]);
   }
 
-  function finishRally(side: TeamSide, detail: string) {
+  function requestRallyEnd(side: TeamSide, detail: string) {
     setWinner(side);
+    setReviewWinner(side);
+    setReviewReason(detail);
+    setReviewOpen(true);
+  }
+
+  function finalizeRally(side: TeamSide, detail: string) {
     addEvent({ tag: "PTO", player: side === "home" ? homeLabel : awayLabel, detail, grade: "●", team: side });
     if (side === "home") setHomeScore(value => value + 1); else setAwayScore(value => value + 1);
     if (side !== servingTeam) {
@@ -421,6 +431,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
       setAttackBlock("Sem desvio");
       setAttackTechnique(isSetterChoice ? "Segunda" : "Ataque");
       addEvent({ tag: "LEV", player: playerLabel(setterNumber), detail: isSetterChoice ? "Levantador passou de segunda" : `Levantamento assumido correto para ${playerLabel(player.n)}`, grade: isSetterChoice ? "↗" : "#", team: possession });
+      if (!isSetterChoice) setPendingSets(value => [...value, { id: Date.now() + value.length, setter: setterNumber, team: possession, attacker: player.n, quality: "Boa" }]);
       setRallyPhase("attack-target");
     }
   }
@@ -449,6 +460,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
       const target = zonePoint(zone, possession);
       const result = gradeForZone(zone, possession);
       setPassTarget(target);
+      setSetterTargets(value => ({ ...value, [possession]: target }));
       addEvent({ tag: contactKind === "reception" ? "REC" : "DEF", player: playerLabel(selected), detail: `${contactKind === "reception" ? "Recepção" : "Defesa"} ${result.label} · Z${zone}`, grade: result.grade, team: possession });
       setSelected(setterNumber);
       setAttackTechnique("Ataque");
@@ -473,7 +485,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     const blocker = possession === "home" ? "away" : "home";
     if (kind === "Bloqueio ponto") {
       addEvent({ tag: "BLQ", player: blocker === "home" ? homeLabel : awayLabel, detail: kind, grade: "#", team: blocker });
-      finishRally(blocker, "Ponto de bloqueio");
+      requestRallyEnd(blocker, "Bloqueio");
       return;
     }
     addEvent({ tag: "BLQ", player: blocker === "home" ? homeLabel : awayLabel, detail: kind, grade: kind === "Desviou" ? "+" : "·", team: blocker });
@@ -487,9 +499,9 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
       const direction: AttackDirection = !attacker || (attacker.x > 34 && attacker.x < 66) ? "Centro" : (attacker.x < 34 && targetX < 34) || (attacker.x > 66 && targetX > 66) ? "Paralela" : "Diagonal";
       setAttackRecords(value => [...value, { player: selected, technique: attackTechnique, direction, zone: attackZone, result: kind, block: attackBlock, reliable: attackBlock === "Sem desvio" || kind === "Bloqueio" }]);
     }
-    if (kind === "Ponto") return finishRally(possession, "Ponto de ataque");
-    if (kind === "Erro") return finishRally(possession === "home" ? "away" : "home", "Erro de ataque adversário");
-    if (kind === "Bloqueio") return finishRally(possession === "home" ? "away" : "home", "Ponto de bloqueio");
+    if (kind === "Ponto") return requestRallyEnd(possession, "Bola no chão");
+    if (kind === "Erro") return requestRallyEnd(possession === "home" ? "away" : "home", "Erro de ataque");
+    if (kind === "Bloqueio") return requestRallyEnd(possession === "home" ? "away" : "home", "Bloqueio");
     if (kind === "Defesa") {
       setPossession(possession === "home" ? "away" : "home");
       setContactKind("defense");
@@ -529,6 +541,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     setSelected(27);
     setSelectedZone(null);
     setPassTarget(undefined);
+    setSetterTargets({});
     setWinner(null);
     setEvents([]);
   }
@@ -544,15 +557,18 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
 
   function openQuickReview() {
     setReviewWinner(possession);
-    setReviewSet("Boa");
     setReviewReason("Erro de ataque");
     setReviewOpen(true);
   }
 
   function confirmQuickReview() {
-    addEvent({ tag: "AJU", player: playerLabel(setterNumber), detail: `Pendência pós-ponto · levantamento ${reviewSet.toLowerCase()} · ${reviewReason}`, grade: reviewSet === "Ruim" ? "-" : "+", team: possession });
+    pendingSets.forEach(set => addEvent({ tag: "AJU", player: playerLabel(set.setter), detail: `Levantamento ${set.quality.toLowerCase()} para ${playerLabel(set.attacker)}`, grade: set.quality === "Ruim" ? "-" : "+", team: set.team }));
     setReviewOpen(false);
-    finishRally(reviewWinner, reviewReason);
+    finalizeRally(reviewWinner, reviewReason);
+  }
+
+  function updatePendingSet(id: number, quality: "Boa" | "Ruim") {
+    setPendingSets(value => value.map(set => set.id === id ? { ...set, quality } : set));
   }
 
   function submitCommand() {
@@ -662,7 +678,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
         </section>
       </div>}
 
-      {reviewOpen && <div className={smart.modalBackdrop} onClick={() => setReviewOpen(false)}><section className={smart.reviewModal} onClick={event => event.stopPropagation()}><header><div><span>REVISÃO PÓS-PONTO</span><h2>Complete só o que ficou pendente</h2></div><button onClick={() => setReviewOpen(false)}>×</button></header><label>Quem ganhou?<div><button className={reviewWinner === "home" ? smart.choiceActive : ""} onClick={() => setReviewWinner("home")}>{homeLabel}</button><button className={reviewWinner === "away" ? smart.choiceActive : ""} onClick={() => setReviewWinner("away")}>{awayLabel}</button></div></label><label>Levantamento<div>{["Boa","Ruim","Não houve"].map(value => <button key={value} className={reviewSet === value ? smart.choiceActive : ""} onClick={() => setReviewSet(value)}>{value}</button>)}</div></label><label>Motivo do fim<div>{["Erro de ataque","Erro de saque","Bloqueio","Bola no chão"].map(value => <button key={value} className={reviewReason === value ? smart.choiceActive : ""} onClick={() => setReviewReason(value)}>{value}</button>)}</div></label><button className={smart.confirmReview} onClick={confirmQuickReview}>Confirmar e fechar o ponto</button></section></div>}
+      {reviewOpen && <div className={smart.modalBackdrop}><section className={smart.reviewModal} onClick={event => event.stopPropagation()}><header><div><span>REVISÃO PÓS-PONTO</span><h2>Complete o que ficou pendente no rally</h2></div></header><label>Quem ganhou?<div><button className={reviewWinner === "home" ? smart.choiceActive : ""} onClick={() => setReviewWinner("home")}>{homeLabel}</button><button className={reviewWinner === "away" ? smart.choiceActive : ""} onClick={() => setReviewWinner("away")}>{awayLabel}</button></div></label><div className={smart.pendingSetList}><strong>Levantamentos do rally · {pendingSets.length}</strong>{pendingSets.length === 0 ? <p>Nenhum levantamento ficou pendente.</p> : pendingSets.map((set,index) => <article key={set.id}><span><b>{index + 1}. {playerLabel(set.setter)}</b><small>para {playerLabel(set.attacker)} · {set.team === "home" ? homeLabel : awayLabel}</small></span><div><button className={set.quality === "Boa" ? smart.choiceActive : ""} onClick={() => updatePendingSet(set.id,"Boa")}>Boa</button><button className={set.quality === "Ruim" ? smart.choiceActive : ""} onClick={() => updatePendingSet(set.id,"Ruim")}>Ruim</button></div></article>)}</div><label>Motivo do fim<div>{["Erro de ataque","Erro de saque","Bloqueio","Bola no chão"].map(value => <button key={value} className={reviewReason === value ? smart.choiceActive : ""} onClick={() => setReviewReason(value)}>{value}</button>)}</div></label><button className={smart.confirmReview} onClick={confirmQuickReview}>Confirmar e preparar o próximo saque</button></section></div>}
     </section>
   );
 }
