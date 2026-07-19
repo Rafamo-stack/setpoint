@@ -172,7 +172,7 @@ function projectPoint(point: CanonicalPoint, team: TeamSide) {
 }
 
 function servicePoint(team: TeamSide) {
-  return team === "home" ? { x: 84, y: 98 } : { x: 16, y: 2 };
+  return team === "home" ? { x: 84, y: 93 } : { x: 16, y: 7 };
 }
 
 function functionalPoint(role: IndoorRole, slot: number, setterSlot: number, mode: FormationMode, setterTarget?: { x: number; y: number }, team: TeamSide = "home") {
