@@ -188,7 +188,7 @@ function functionalPoint(role: IndoorRole, slot: number, setterSlot: number, mod
   } else {
     if (role === "LEV") return setterTarget ?? projectPoint({ x: 66, d: .08 }, team);
     if (role === "LIB") point = { x: 22, d: .78 };
-    else if (role === "M1" || role === "M2") point = { x: 50, d: .06 };
+    else if (role === "M1" || role === "M2") point = { x: 42, d: .06 };
     else if ((role === "P1" || role === "P2") && isFront) point = { x: setterSlot === 1 ? 91 : 9, d: .10 };
     else if ((role === "P1" || role === "P2") && !isFront) point = { x: 50, d: .62 };
     else if (role === "OP" && isFront) point = { x: setterSlot === 1 ? 9 : 91, d: .10 };
