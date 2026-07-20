@@ -6,14 +6,18 @@ import smart from "./smart.module.css";
 
 type Concept = "arena" | "tactical";
 type View = "command" | "court" | "beach" | "analysis" | "management";
-type RallyPhase = "ready" | "serve-flight" | "reception-player" | "contact-zone" | "setter-quality" | "setter-player" | "attack-player" | "attack-target" | "block-result" | "attack-result" | "defense-player" | "rally-end";
+type RallyPhase = "ready" | "serve-flight" | "serve-target" | "reception-player" | "contact-zone" | "setter-quality" | "setter-player" | "attack-player" | "attack-target" | "block-result" | "attack-result" | "defense-player" | "rally-end";
 type TeamSide = "home" | "away";
 type RallyEvent = { tag: string; player: string; detail: string; grade: string; team: TeamSide };
 type ServeOrigin = 5 | 6 | 1;
 type AthleteProfile = { n: number; name: string; role: string; team: TeamSide; serveOrigin: ServeOrigin; serveTarget: number; note: string };
 type AttackTechnique = "Ataque" | "Largada" | "Segunda";
 type AttackDirection = "Paralela" | "Diagonal" | "Centro";
-type AttackRecord = { player: number; technique: AttackTechnique; direction: AttackDirection; zone: number; subzone?: string; result: string; block: string; reliable: boolean };
+type AttackRecord = { player: number; technique: AttackTechnique; direction: AttackDirection; zone: number; subzone?: string; result: string; block: string; reliable: boolean; originX?: number; originY?: number; team?: TeamSide };
+type PassRecord = { player: number; team: TeamSide; zone: number; grade: string; label: string };
+type ServeRecord = { player: number; team: TeamSide; origin: ServeOrigin; zone: number; subzone: string; result: string };
+type ReportKind = "attack" | "pass" | "serve";
+type ArchivedRally = { id: number; winner: TeamSide; label: string; actions: RallyEvent[] };
 type SetTempo = "1º tempo" | "2º tempo" | "3º tempo";
 type PendingSet = { id: number; setter: number; team: TeamSide; attacker: number; destination: string; quality: "Boa" | "Ruim"; tempo: SetTempo };
 
@@ -153,6 +157,66 @@ const sampleAttackRecords: AttackRecord[] = [
   { player: 11, technique: "Ataque", direction: "Diagonal", zone: 9, result: "Ponto", block: "Sem desvio", reliable: true },
 ];
 
+const samplePassRecords: PassRecord[] = [
+  { player: 11, team: "home", zone: 2, grade: "#", label: "perfeita" },
+  { player: 11, team: "home", zone: 2, grade: "+", label: "positiva" },
+  { player: 11, team: "home", zone: 5, grade: "+", label: "positiva" },
+  { player: 11, team: "home", zone: 4, grade: "!", label: "fora do sistema" },
+  { player: 11, team: "home", zone: 8, grade: "-", label: "negativa" },
+  { player: 31, team: "away", zone: 5, grade: "+", label: "positiva" },
+];
+
+const sampleServeRecords: ServeRecord[] = [
+  { player: 11, team: "home", origin: 1, zone: 5, subzone: "E", result: "Em jogo" },
+  { player: 11, team: "home", origin: 1, zone: 8, subzone: "B", result: "Ace" },
+  { player: 31, team: "away", origin: 6, zone: 5, subzone: "D", result: "Em jogo" },
+];
+
+const sampleRallies: ArchivedRally[] = [
+  { id: 2, winner: "home", label: "Rally #27 · 12 × 10", actions: [
+    { tag: "SAQ", player: "#31 João Vitor", detail: "Saque para Z5D", grade: "+", team: "away" },
+    { tag: "REC", player: "#11 Caio Mendes", detail: "Recepção positiva · Z5", grade: "+", team: "home" },
+    { tag: "LEV", player: "#7 Rafael Luz", detail: "Levantamento para a ponta", grade: "#", team: "home" },
+    { tag: "ATA", player: "#11 Caio Mendes", detail: "Ataque para Z9C · ponto", grade: "#", team: "home" },
+  ]},
+  { id: 1, winner: "away", label: "Rally #26 · 11 × 10", actions: [
+    { tag: "SAQ", player: "#7 Rafael Luz", detail: "Saque para Z1F", grade: "+", team: "home" },
+    { tag: "REC", player: "#22 Tomás R.", detail: "Recepção fora do sistema · Z7", grade: "!", team: "away" },
+    { tag: "ATA", player: "#29 Nicolas S.", detail: "Ataque diagonal para Z7H", grade: "+", team: "away" },
+  ]},
+];
+
+function ReportCourt({ kind, team, attacks, passes, serves }: { kind: ReportKind; team: TeamSide; attacks: AttackRecord[]; passes: PassRecord[]; serves: ServeRecord[] }) {
+  const zone = (number: number, side: TeamSide) => {
+    const row = Math.floor((number - 1) / 3);
+    const column = (number - 1) % 3;
+    return { x: side === "home" ? [50,150,250][column] : [250,150,50][column], y: side === "home" ? [105,135,165][row] : [75,45,15][row] };
+  };
+  const detail = (number: number, subzone: string | undefined, side: TeamSide) => {
+    const center = zone(number, side);
+    const logical = Math.max(0, "ABCDEFGHI".indexOf(subzone ?? "E"));
+    const screen = side === "home" ? logical : 8 - logical;
+    return { x: center.x + [-32,0,32][screen % 3], y: center.y + [-9,0,9][Math.floor(screen / 3)] };
+  };
+  const serveOriginPoint = (origin: ServeOrigin, side: TeamSide) => ({ x: side === "home" ? ({5:48,6:150,1:252} as const)[origin] : 300 - ({5:48,6:150,1:252} as const)[origin], y: side === "home" ? 178 : 2 });
+  const outcomeColor = (result: string) => result === "Ponto" || result === "Ace" ? "#35da98" : result.includes("Erro") || result === "Bloqueio" ? "#ff5d73" : "#45b7ff";
+  const passColor = (grade: string) => grade === "#" ? "#35da98" : grade === "+" ? "#9fe870" : grade === "!" ? "#ffbe55" : "#ff5d73";
+  const marks = kind === "attack" ? attacks : kind === "pass" ? passes : serves;
+  return <div className={smart.visualReportCourt}>
+    <svg viewBox="0 0 300 180" role="img" aria-label={`Mapa visual de ${kind === "attack" ? "ataques" : kind === "pass" ? "passes" : "saques"}`}>
+      <defs><marker id={`arrow-${kind}`} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke" /></marker></defs>
+      <rect x="1" y="1" width="298" height="178" rx="5" className={smart.reportCourtFloor} />
+      {[100,200].map(x => <line key={`v${x}`} x1={x} y1="1" x2={x} y2="179" className={smart.reportGridLine} />)}
+      {[30,60,120,150].map(y => <line key={`h${y}`} x1="1" y1={y} x2="299" y2={y} className={smart.reportGridLine} />)}
+      <line x1="1" y1="90" x2="299" y2="90" className={smart.reportNet} />
+      {kind === "attack" && attacks.map((record,index) => { const end=detail(record.zone,record.subzone,record.team === "away" ? "home" : "away"); const start={x:record.originX ? record.originX*3 : record.team === "away" ? 225 : 75,y:record.originY ? record.originY*1.8 : record.team === "away" ? 66 : 114}; const color=outcomeColor(record.result); return <g key={`${record.zone}-${index}`}><line x1={start.x} y1={start.y} x2={end.x} y2={end.y} stroke={color} className={smart.reportArrow} markerEnd={`url(#arrow-${kind})`} /><circle cx={end.x} cy={end.y} r="3.5" fill={color} /></g> })}
+      {kind === "pass" && passes.map((record,index) => { const point=zone(record.zone,record.team); const dx=((index%3)-1)*5; const dy=(Math.floor(index/3)%3-1)*4; return <g key={`${record.zone}-${index}`}><circle cx={point.x+dx} cy={point.y+dy} r="7" fill={passColor(record.grade)} className={smart.passDot} /><text x={point.x+dx} y={point.y+dy+2.7} textAnchor="middle">{record.grade}</text></g> })}
+      {kind === "serve" && serves.map((record,index) => { const start=serveOriginPoint(record.origin,record.team); const end=detail(record.zone,record.subzone,record.team === "home" ? "away" : "home"); const color=outcomeColor(record.result); return <g key={`${record.zone}-${index}`}><line x1={start.x} y1={start.y} x2={end.x} y2={end.y} stroke={color} className={smart.reportArrow} markerEnd={`url(#arrow-${kind})`} /><circle cx={end.x} cy={end.y} r="3.5" fill={color} /></g> })}
+    </svg>
+    {marks.length === 0 && <div className={smart.emptyMap}>Nenhum registro deste fundamento</div>}
+  </div>;
+}
+
 const nextRotationSlot: Record<number, number> = { 1: 6, 6: 5, 5: 4, 4: 3, 3: 2, 2: 1 };
 
 function rotatedSlot(initial: number, steps: number) {
@@ -283,6 +347,12 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
   const [rosterOpen, setRosterOpen] = useState(false);
   const [profileNumber, setProfileNumber] = useState(11);
   const [attackRecords, setAttackRecords] = useState<AttackRecord[]>(sampleAttackRecords);
+  const [passRecords, setPassRecords] = useState<PassRecord[]>(samplePassRecords);
+  const [serveRecords, setServeRecords] = useState<ServeRecord[]>(sampleServeRecords);
+  const [reportKind, setReportKind] = useState<ReportKind>("attack");
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [rallyArchive, setRallyArchive] = useState<ArchivedRally[]>(sampleRallies);
+  const [selectedRallyId, setSelectedRallyId] = useState(sampleRallies[0].id);
   const [attackTechnique, setAttackTechnique] = useState<AttackTechnique>("Ataque");
   const [attackBlock, setAttackBlock] = useState("Sem desvio");
   const [attackZone, setAttackZone] = useState<number | null>(null);
@@ -306,7 +376,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     { n: 22, role: "P2" as const, slot: 5 }, { n: 35, role: "M2" as const, slot: 6 },
   ];
   const attackPhases: RallyPhase[] = ["setter-quality", "setter-player", "attack-player", "attack-target", "block-result", "attack-result"];
-  const receptionPhases: RallyPhase[] = ["ready", "serve-flight", "reception-player", "contact-zone"];
+  const receptionPhases: RallyPhase[] = ["ready", "serve-flight", "serve-target", "reception-player", "contact-zone"];
 
   function modeFor(team: TeamSide): FormationMode {
     const receiver = servingTeam === "home" ? "away" : "home";
@@ -352,11 +422,13 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
         .filter(player => player.team === possession && ["P1", "P2", "OP", "M1", "M2"].includes(player.role))
         .map(player => player.n);
   const phaseStep: Record<RallyPhase, string> = {
+    "serve-target": "DESTINO DO SAQUE",
     ready: "SAQUE", "serve-flight": "SAQUE", "reception-player": "RECEPÇÃO", "contact-zone": contactKind === "reception" ? "RECEPÇÃO" : "DEFESA",
     "setter-quality": "LEVANTAMENTO", "setter-player": "SEGUNDO TOQUE", "attack-player": "OPÇÕES DE ATAQUE", "attack-target": "DIREÇÃO DO ATAQUE",
     "block-result": "TOQUE NO BLOQUEIO", "attack-result": "RESULTADO", "defense-player": "DEFESA", "rally-end": "FIM DO RALLY",
   };
   const prompt: Record<RallyPhase, string> = {
+    "serve-target": "Onde o saque chegou? Marque a zona e o quadrante A–I",
     ready: beach ? "Pressione Enter para iniciar o saque" : servingTeam === "home" ? `#${serverFor("home")} pronto para sacar na posição 1` : `Recepção 5x1 com LEV na P${setterHomeSlot} · pressione Enter`,
     "serve-flight": `Saque de #${serverFor(servingTeam)} em andamento · equipe se reposicionando`,
     "reception-player": "Quem recebeu? Toque no atleta",
@@ -398,7 +470,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     setContactKind("reception");
     setEvents([{ tag: "SAQ", player: playerLabel(server), detail: "Saque em jogo", grade: "+", team: servingTeam }]);
     setRallyPhase("serve-flight");
-    window.setTimeout(() => setRallyPhase("reception-player"), 850);
+    window.setTimeout(() => setRallyPhase("serve-target"), 550);
   }
 
   function addEvent(event: RallyEvent) {
@@ -414,7 +486,16 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
   }
 
   function finalizeRally(side: TeamSide, detail: string) {
-    addEvent({ tag: "PTO", player: side === "home" ? homeLabel : awayLabel, detail, grade: "●", team: side });
+    const pointEvent: RallyEvent = { tag: "PTO", player: side === "home" ? homeLabel : awayLabel, detail, grade: "●", team: side };
+    const nextHome = homeScore + (side === "home" ? 1 : 0);
+    const nextAway = awayScore + (side === "away" ? 1 : 0);
+    setEvents(value => {
+      const actions = [...value, pointEvent];
+      const archived: ArchivedRally = { id: Date.now(), winner: side, label: `Rally #${rallyArchive.length + 28} · ${nextHome} × ${nextAway}`, actions };
+      setRallyArchive(history => [archived, ...history]);
+      setSelectedRallyId(archived.id);
+      return actions;
+    });
     if (side === "home") setHomeScore(value => value + 1); else setAwayScore(value => value + 1);
     if (side !== servingTeam) {
       if (!beach) {
@@ -491,6 +572,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
       setPassTarget(target);
       setSetterTargets(value => ({ ...value, [possession]: target }));
       addEvent({ tag: contactKind === "reception" ? "REC" : "DEF", player: playerLabel(selected), detail: `${contactKind === "reception" ? "Recepção" : "Defesa"} ${result.label} · Z${zone}`, grade: result.grade, team: possession });
+      if (contactKind === "reception") setPassRecords(value => [...value, { player: selected, team: possession, zone, grade: result.grade, label: result.label }]);
       setAttackTechnique("Ataque");
       setAttackBlock("Sem desvio");
       const setterDefended = contactKind === "defense" && selected === setterNumber;
@@ -513,6 +595,18 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
   }
 
   function chooseAttackSubzone(zone: number, subzone: string) {
+    if (rallyPhase === "serve-target") {
+      const server = serverFor(servingTeam);
+      const profile = profiles.find(item => item.n === server);
+      const point = attackDetailPoint(zone, subzone, servingTeam === "home" ? "away" : "home");
+      setAttackZone(zone);
+      setAttackSubzone(subzone);
+      setPassTarget(point);
+      setServeRecords(value => [...value, { player: server, team: servingTeam, origin: profile?.serveOrigin ?? 1, zone, subzone, result: "Em jogo" }]);
+      setEvents(value => value.map((event,index) => index === 0 ? { ...event, detail: `Saque para Z${zone}${subzone}` } : event));
+      window.setTimeout(() => setRallyPhase("reception-player"), 350);
+      return;
+    }
     setAttackZone(zone);
     setAttackSubzone(subzone);
     addEvent({ tag: "ATA", player: playerLabel(selected), detail: `${attackTechnique} para Z${zone}${subzone}${attackBlock === "Sem desvio" ? " · trajetória limpa" : ` · ${attackBlock.toLowerCase()}`}`, grade: "→", team: possession });
@@ -543,7 +637,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
       const attacker = allPlayers.find(player => player.n === selected);
       const targetX = zonePoint(attackZone, possession === "home" ? "away" : "home").x;
       const direction: AttackDirection = !attacker || (attacker.x > 34 && attacker.x < 66) ? "Centro" : (attacker.x < 34 && targetX < 34) || (attacker.x > 66 && targetX > 66) ? "Paralela" : "Diagonal";
-      setAttackRecords(value => [...value, { player: selected, technique: attackTechnique, direction, zone: attackZone, subzone: attackSubzone ?? undefined, result: kind, block: attackBlock, reliable: attackBlock === "Sem desvio" || kind === "Bloqueio" }]);
+      setAttackRecords(value => [...value, { player: selected, technique: attackTechnique, direction, zone: attackZone, subzone: attackSubzone ?? undefined, result: kind, block: attackBlock, reliable: attackBlock === "Sem desvio" || kind === "Bloqueio", originX: attacker?.x, originY: attacker?.y, team: possession }]);
     }
     if (kind === "Ponto") return requestRallyEnd(possession, "Bola no chão");
     if (kind === "Erro") return requestRallyEnd(possession === "home" ? "away" : "home", "Erro de ataque");
@@ -576,10 +670,10 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
 
   const selectedPlayer = allPlayers.find(player => player.n === selected);
   const ballAtPass = passTarget && ["setter-quality", "attack-player"].includes(rallyPhase);
-  const detailedAttackTarget = attackZone && attackSubzone ? attackDetailPoint(attackZone, attackSubzone, possession === "home" ? "away" : "home") : null;
+  const detailedAttackTarget = attackZone && attackSubzone ? attackDetailPoint(attackZone, attackSubzone, rallyPhase === "serve-target" || rallyPhase === "reception-player" ? (servingTeam === "home" ? "away" : "home") : (possession === "home" ? "away" : "home")) : null;
   const incomingServe = rallyPhase === "reception-player" && contactKind === "reception";
   const ballPosition = detailedAttackTarget ?? (ballAtPass ? passTarget : incomingServe ? { x: 50, y: servingTeam === "home" ? 25 : 75 } : selectedPlayer ? { x: selectedPlayer.x, y: selectedPlayer.y - 5 } : { x: 50, y: 50 });
-  const zoneSide: TeamSide = rallyPhase === "attack-target" ? (possession === "home" ? "away" : "home") : possession;
+  const zoneSide: TeamSide = rallyPhase === "serve-target" ? (servingTeam === "home" ? "away" : "home") : rallyPhase === "attack-target" ? (possession === "home" ? "away" : "home") : possession;
 
   function cycleHomeRotation(direction: 1 | -1) {
     setHomeRotation(value => (value + direction + 6) % 6);
@@ -598,8 +692,11 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
 
   const selectedProfile = profiles.find(profile => profile.n === profileNumber) ?? profiles[0];
   const profileAttacks = attackRecords.filter(record => record.player === profileNumber);
+  const profilePasses = passRecords.filter(record => record.player === profileNumber);
+  const profileServes = serveRecords.filter(record => record.player === profileNumber);
   const directionCount = (direction: AttackDirection) => profileAttacks.filter(record => record.reliable && record.direction === direction).length;
   const profilePoints = profileAttacks.filter(record => record.result === "Ponto").length;
+  const selectedArchivedRally = rallyArchive.find(rally => rally.id === selectedRallyId) ?? rallyArchive[0];
 
   function updateProfile(patch: Partial<AthleteProfile>) {
     setProfiles(value => value.map(profile => profile.n === profileNumber ? { ...profile, ...patch } : profile));
@@ -610,7 +707,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     let reason = "Erro de ataque";
     let faultTeam = possession;
     let inferredWinner = other(possession);
-    if (rallyPhase === "reception-player") {
+    if (rallyPhase === "serve-target" || rallyPhase === "reception-player") {
       reason = "Erro de saque";
       faultTeam = servingTeam;
       inferredWinner = other(servingTeam);
@@ -632,6 +729,10 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     pendingSets.forEach(set => addEvent({ tag: "AJU", player: playerLabel(set.setter), detail: `Levantamento ${set.quality.toLowerCase()} · ${set.tempo} · ${set.destination} para ${playerLabel(set.attacker)}`, grade: set.quality === "Ruim" ? "-" : "+", team: set.team }));
     setReviewOpen(false);
     finalizeRally(reviewWinner, reviewReason);
+  }
+
+  function updateArchivedAction(rallyId: number, actionIndex: number, patch: Partial<RallyEvent>) {
+    setRallyArchive(history => history.map(rally => rally.id === rallyId ? { ...rally, actions: rally.actions.map((action,index) => index === actionIndex ? { ...action, ...patch } : action) } : rally));
   }
 
   function updatePendingSet(id: number, quality: "Boa" | "Ruim") {
@@ -665,6 +766,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
         <nav className={styles.simpleTools}>
           {!beach && <><button onClick={() => cycleHomeRotation(-1)} aria-label="Rodízio anterior">‹</button><button onClick={() => cycleHomeRotation(1)}>↻ Próxima · LEV P{setterHomeSlot}</button></>}
           {!beach && <button onClick={() => setRosterOpen(true)}>☷ Relação nominal</button>}
+          {!beach && <button onClick={() => setHistoryOpen(true)}>◷ Histórico de pontos</button>}
           <button onClick={() => setAdvanced(value => !value)}>{advanced ? "Ocultar detalhes" : "Mais detalhes"}</button>
           <button className={styles.fullscreenButton} onClick={() => setFullscreen(value => !value)}>{fullscreen ? "× Sair" : "⛶ Tela cheia"}</button>
         </nav>
@@ -685,7 +787,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
                 {displayedZones(zoneSide).map(zone => <button key={zone} className={selectedZone === zone ? smart.zoneSelected : ""} onClick={() => handleZone(zone)} aria-label={`Zona ${zone}`}><b>{zone}</b><small>{gradeForZone(zone, zoneSide).grade === "#" ? "ideal" : ""}</small></button>)}
               </div>
             )}
-            {rallyPhase === "attack-target" && <div className={`${smart.detailedZonePicker} ${zoneSide === "away" ? smart.zoneTop : smart.zoneBottom}`}>{displayedZones(zoneSide).map(zone => <section key={zone}><strong>{zone}</strong><div>{displayedSubzones(zoneSide).map(letter => <button key={letter} onClick={() => chooseAttackSubzone(zone,letter)} aria-label={`Zona ${zone}${letter}`}>{letter}</button>)}</div></section>)}</div>}
+            {(rallyPhase === "attack-target" || rallyPhase === "serve-target") && <div className={`${smart.detailedZonePicker} ${zoneSide === "away" ? smart.zoneTop : smart.zoneBottom}`}>{displayedZones(zoneSide).map(zone => <section key={zone}><strong>{zone}</strong><div>{displayedSubzones(zoneSide).map(letter => <button key={letter} onClick={() => chooseAttackSubzone(zone,letter)} aria-label={`Zona ${zone}${letter}`}>{letter}</button>)}</div></section>)}</div>}
             {!beach && (homeRotation > 0 || awayRotation > 0) && <div key={`${homeRotation}-${awayRotation}`} className={styles.rotationMotion}>↻ Rodízio atualizado · P{setterHomeSlot}</div>}
           </div>
         </main>
@@ -728,6 +830,16 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
         <div className={styles.commandSuggestions}><button onClick={() => setCommand("31 rec +")}>31 rec +</button><button onClick={() => setCommand("9 ataque #")}>9 ataque #</button><button onClick={() => setCommand("ponto nosso")}>ponto nosso</button></div>
       </div>
 
+      {historyOpen && <div className={smart.modalBackdrop} onClick={() => setHistoryOpen(false)}>
+        <section className={smart.historyModal} onClick={event => event.stopPropagation()}>
+          <header><div><span>HISTÓRICO DA PARTIDA</span><h2>Todos os rallies podem ser corrigidos</h2></div><button onClick={() => setHistoryOpen(false)}>×</button></header>
+          <div className={smart.historyWorkspace}>
+            <aside>{rallyArchive.map(rally => <button key={rally.id} className={rally.id === selectedArchivedRally?.id ? smart.historyActive : ""} onClick={() => setSelectedRallyId(rally.id)}><b>{rally.label}</b><span>{rally.winner === "home" ? homeLabel : awayLabel} venceu · {rally.actions.length} ações</span></button>)}</aside>
+            <main>{selectedArchivedRally && <><header><div><span>RALLY SELECIONADO</span><h3>{selectedArchivedRally.label}</h3></div><em>Alterações salvas nesta sessão</em></header><div className={smart.historyActions}>{selectedArchivedRally.actions.map((action,index) => <article key={`${action.tag}-${index}`}><i className={action.team === "home" ? styles.homeCode : styles.awayCode}>{action.tag}</i><label>Atleta ou equipe<input value={action.player} onChange={event => updateArchivedAction(selectedArchivedRally.id,index,{ player:event.target.value })} /></label><label>Descrição da ação<input value={action.detail} onChange={event => updateArchivedAction(selectedArchivedRally.id,index,{ detail:event.target.value })} /></label><label>Nota<select value={action.grade} onChange={event => updateArchivedAction(selectedArchivedRally.id,index,{ grade:event.target.value })}>{["#","+","!","-","→","●"].map(grade => <option key={grade}>{grade}</option>)}</select></label></article>)}</div></>}</main>
+          </div>
+        </section>
+      </div>}
+
       {rosterOpen && <div className={smart.modalBackdrop} onClick={() => setRosterOpen(false)}>
         <section className={smart.rosterModal} onClick={event => event.stopPropagation()}>
           <header><div><span>RELAÇÃO NOMINAL</span><h2>Perfis e tendências dos atletas</h2></div><button onClick={() => setRosterOpen(false)}>×</button></header>
@@ -741,16 +853,11 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
                 <label className={smart.noteField}>Características<input value={selectedProfile.note} onChange={event => updateProfile({ note: event.target.value })} /></label>
               </div>
               <section className={smart.athleteReport}>
-                <header><div><span>RELATÓRIO INDIVIDUAL</span><h3>Mapa de ataque · {profileAttacks.length} bolas</h3></div><strong>{profilePoints} pontos</strong></header>
-                <div className={smart.directionMap}><div><i style={{ width: `${profileAttacks.length ? directionCount("Paralela") / profileAttacks.length * 100 : 0}%` }} /><b>↑ Paralela</b><span>{directionCount("Paralela")}</span></div><div><i style={{ width: `${profileAttacks.length ? directionCount("Diagonal") / profileAttacks.length * 100 : 0}%` }} /><b>↗ Diagonal</b><span>{directionCount("Diagonal")}</span></div><div><i style={{ width: `${profileAttacks.length ? directionCount("Centro") / profileAttacks.length * 100 : 0}%` }} /><b>· Centro</b><span>{directionCount("Centro")}</span></div></div>
-                <div className={smart.reportFacts}>
-                  <p><b>{directionCount("Paralela")}</b><span>ataques na paralela</span></p>
-                  <p><b>{profileAttacks.filter(record => record.technique === "Largada").length}</b><span>largadas</span></p>
-                  <p><b>{profileAttacks.filter(record => record.result === "Erro na rede").length}</b><span>erros na rede</span></p>
-                  <p><b>{profileAttacks.filter(record => record.result === "Bloqueio" && record.direction === "Diagonal").length}</b><span>bloqueios na diagonal</span></p>
-                  <p><b>{profileAttacks.filter(record => record.result === "Ponto" && record.direction === "Diagonal").length}</b><span>pontos na diagonal</span></p>
-                </div>
-                <div className={smart.recentAttacks}>{profileAttacks.slice(-5).reverse().map((record,index) => <span key={`${record.zone}-${record.subzone ?? ""}-${index}`}><b>{record.technique === "Largada" ? "⌁" : "➜"} Z{record.zone}{record.subzone ?? ""}</b>{record.direction} · {record.result}{!record.reliable ? " · direção ignorada (desvio)" : ""}</span>)}</div>
+                <header><div><span>RELATÓRIO INDIVIDUAL</span><h3>{reportKind === "attack" ? `Mapa de ataque · ${profileAttacks.length} bolas` : reportKind === "pass" ? `Mapa de recepção · ${profilePasses.length} passes` : `Mapa de saque · ${profileServes.length} saques`}</h3></div><strong>{reportKind === "attack" ? `${profilePoints} pontos` : `${reportKind === "pass" ? profilePasses.length : profileServes.length} ações`}</strong></header>
+                <div className={smart.reportTabs}><button className={reportKind === "attack" ? smart.reportTabActive : ""} onClick={() => setReportKind("attack")}>➜ Ataque</button><button className={reportKind === "pass" ? smart.reportTabActive : ""} onClick={() => setReportKind("pass")}>● Recepção</button><button className={reportKind === "serve" ? smart.reportTabActive : ""} onClick={() => setReportKind("serve")}>↗ Saque</button></div>
+                <ReportCourt kind={reportKind} team={selectedProfile.team} attacks={profileAttacks} passes={profilePasses} serves={profileServes} />
+                <div className={smart.reportLegend}>{reportKind === "pass" ? <><span><i data-tone="perfect" /># Perfeita</span><span><i data-tone="positive" />+ Positiva</span><span><i data-tone="system" />! Fora do sistema</span><span><i data-tone="negative" />− Negativa</span></> : <><span><i data-tone="point" />Ponto / ace</span><span><i data-tone="play" />Em jogo</span><span><i data-tone="error" />Erro / bloqueio</span></>}</div>
+                {reportKind === "attack" && <><div className={smart.directionMap}><div><i style={{ width: `${profileAttacks.length ? directionCount("Paralela") / profileAttacks.length * 100 : 0}%` }} /><b>↑ Paralela</b><span>{directionCount("Paralela")}</span></div><div><i style={{ width: `${profileAttacks.length ? directionCount("Diagonal") / profileAttacks.length * 100 : 0}%` }} /><b>↗ Diagonal</b><span>{directionCount("Diagonal")}</span></div><div><i style={{ width: `${profileAttacks.length ? directionCount("Centro") / profileAttacks.length * 100 : 0}%` }} /><b>· Centro</b><span>{directionCount("Centro")}</span></div></div><div className={smart.reportFacts}><p><b>{directionCount("Paralela")}</b><span>paralelas</span></p><p><b>{profileAttacks.filter(record => record.technique === "Largada").length}</b><span>largadas</span></p><p><b>{profileAttacks.filter(record => record.result.includes("Erro")).length}</b><span>erros</span></p><p><b>{profileAttacks.filter(record => record.result === "Bloqueio").length}</b><span>bloqueios</span></p><p><b>{profilePoints}</b><span>pontos</span></p></div></>}
               </section>
             </main>
           </div>
