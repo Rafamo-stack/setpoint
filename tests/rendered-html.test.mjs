@@ -9,15 +9,15 @@ async function render() {
   return worker.fetch(new Request("http://localhost/", { headers: { accept: "text/html" } }), { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } }, { waitUntil() {}, passThroughOnException() {} });
 }
 
-test("server-renders the SetMatch product shell", async () => {
+test("server-renders the SetPoint product shell", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
   const html = await response.text();
-  assert.match(html, /<title>SetMatch/);
+  assert.match(html, /<title>SetPoint/);
   assert.match(html, /Scout quadra/);
   assert.match(html, /Scout praia/);
-  assert.match(html, /Arena Intelligence/);
+  assert.match(html, /SetPoint Intelligence/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape/);
 });
 

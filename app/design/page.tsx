@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import styles from "./design.module.css";
 import smart from "./smart.module.css";
+import brand from "./brand.module.css";
 
 type Concept = "arena" | "tactical";
 type View = "command" | "court" | "beach" | "analysis" | "management";
@@ -49,9 +50,9 @@ const awayPlayers = [
 
 function Mark({ compact = false }: { compact?: boolean }) {
   return (
-    <div className={styles.mark}>
-      <span className={styles.markBall}>V</span>
-      {!compact && <strong>SET<span>MATCH</span></strong>}
+    <div className={`${styles.mark} ${brand.logo}`}>
+      <span className={`${styles.markBall} ${brand.logoSymbol}`}><i /><b>SP</b></span>
+      {!compact && <strong className={brand.wordmark}>SET<span>POINT</span></strong>}
     </div>
   );
 }
@@ -409,7 +410,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     : buildIndoorTeam("away", awayRotation, awayLineup, 36);
   const allPlayers = [...teamHome.map(p => ({ ...p, team: "home" as const })), ...teamAway.map(p => ({ ...p, team: "away" as const }))];
   const current = allPlayers.find(p => p.n === selected) ?? allPlayers[0];
-  const homeLabel = beach ? "LUNA / BIA" : "SETMATCH";
+  const homeLabel = beach ? "LUNA / BIA" : "SETPOINT";
   const awayLabel = beach ? "MAYA / CLARA" : "ATHLETIC";
   const playerName = rosterNames[selected] ?? (selected === 14 ? "Clara" : selected === 8 ? "Maya" : selected === 3 ? "Bia" : "Luna");
   const setterNumber = beach
@@ -888,7 +889,7 @@ function CommandView() {
         <div className={styles.matchGlow} />
         <div className={styles.matchMeta}><span>SUPERLIGA B · HOJE 20:30</span><b>GINÁSIO MUNICIPAL · CASA</b></div>
         <div className={styles.versus}>
-          <div><i className={styles.teamBadge}>SM</i><strong>SetMatch</strong><span>8 V · 2 D</span></div>
+          <div><i className={styles.teamBadge}>SP</i><strong>SetPoint</strong><span>8 V · 2 D</span></div>
           <section><small>PRÓXIMA PARTIDA</small><b>VS</b><em>02:14:37</em></section>
           <div><i className={styles.teamBadgeAlt}>AV</i><strong>Athletic Vôlei</strong><span>7 V · 3 D</span></div>
         </div>
@@ -912,7 +913,7 @@ function CommandView() {
       <div className={styles.lowerGrid}>
         <div className={styles.card}><div className={styles.cardTitle}><div><span>AGENDA</span><h3>Esta semana</h3></div><button>Ver tudo</button></div><div className={styles.schedule}><p><b>18</b><span>JUL<br/><small>HOJE</small></span><strong>Athletic Vôlei</strong><em>20:30</em></p><p><b>20</b><span>JUL<br/><small>TREINO</small></span><strong>Recepção + side-out</strong><em>18:00</em></p></div></div>
         <div className={styles.card}><div className={styles.cardTitle}><div><span>ELENCO</span><h3>Disponibilidade</h3></div></div><div className={styles.rosterFaces}>{[7,11,4,9,2,15].map((n)=><i key={n}>{n}</i>)}<span><b>11</b> disponíveis<small>1 em recuperação</small></span></div></div>
-        <div className={styles.card}><div className={styles.cardTitle}><div><span>ÚLTIMO JOGO</span><h3>SetMatch 3 × 1 Orion</h3></div></div><div className={styles.lastGame}><b>53%</b><span>eficiência de ataque</span><div><i style={{width:"78%"}} /></div><small>Relatório completo →</small></div></div>
+        <div className={styles.card}><div className={styles.cardTitle}><div><span>ÚLTIMO JOGO</span><h3>SetPoint 3 × 1 Orion</h3></div></div><div className={styles.lastGame}><b>53%</b><span>eficiência de ataque</span><div><i style={{width:"78%"}} /></div><small>Relatório completo →</small></div></div>
       </div>
     </section>
   );
@@ -921,7 +922,7 @@ function CommandView() {
 function AnalysisView() {
   return (
     <section className={styles.analysis}>
-      <header className={styles.sectionHeader}><div><span>ANÁLISE PÓS-JOGO</span><h1>SetMatch 3 × 1 Orion</h1><p>18 jul 2026 · 1h42 · Superliga B</p></div><div><button>Compartilhar</button><button className={styles.export}>Exportar relatório</button></div></header>
+      <header className={styles.sectionHeader}><div><span>ANÁLISE PÓS-JOGO</span><h1>SetPoint 3 × 1 Orion</h1><p>18 jul 2026 · 1h42 · Superliga B</p></div><div><button>Compartilhar</button><button className={styles.export}>Exportar relatório</button></div></header>
       <div className={styles.metricsRow}>
         <Metric label="EFICIÊNCIA DE ATAQUE" value="53%" detail="+8% vs. média" tone="green" />
         <Metric label="SIDE-OUT" value="68%" detail="42 de 62 rallies" tone="blue" />
@@ -993,9 +994,9 @@ function ManagementView() {
 export default function DesignConcepts() {
   const [concept, setConcept] = useState<Concept>("arena");
   const [view, setView] = useState<View>("command");
-  const title = useMemo(() => concept === "arena" ? "Arena Intelligence" : "Tactical Command", [concept]);
+  const title = useMemo(() => concept === "arena" ? "SetPoint Intelligence" : "SetPoint Precision", [concept]);
   return (
-    <main className={`${styles.app} ${styles[concept]}`}>
+    <main className={`${styles.app} ${styles[concept]} ${brand.identity}`}>
       <aside className={styles.sidebar}>
         <Mark />
         <nav>
@@ -1012,10 +1013,10 @@ export default function DesignConcepts() {
       </aside>
       <div className={styles.shell}>
         <div className={styles.conceptBar}>
-          <div><span>EXPLORAÇÃO VISUAL</span><strong>{title}</strong><small>Conceito {concept === "arena" ? "01" : "02"} de 02</small></div>
+          <div><span>CADA TOQUE VIRA DECISÃO</span><strong>{title}</strong><small>{concept === "arena" ? "Modo noturno" : "Modo claro"}</small></div>
           <div className={styles.conceptSwitch}>
-            <button className={concept === "arena" ? styles.conceptActive : ""} onClick={() => setConcept("arena")}><b>01</b><span>Arena<small>cinematográfico</small></span></button>
-            <button className={concept === "tactical" ? styles.conceptActive : ""} onClick={() => setConcept("tactical")}><b>02</b><span>Tactical<small>precisão técnica</small></span></button>
+            <button className={concept === "arena" ? styles.conceptActive : ""} onClick={() => setConcept("arena")}><b>●</b><span>Noturno<small>foco total</small></span></button>
+            <button className={concept === "tactical" ? styles.conceptActive : ""} onClick={() => setConcept("tactical")}><b>○</b><span>Claro<small>leitura tática</small></span></button>
           </div>
         </div>
         <div className={styles.mobileTabs}>

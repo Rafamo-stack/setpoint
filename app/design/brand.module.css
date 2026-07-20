@@ -1,0 +1,47 @@
+.identity{
+  --bg:#07131b;
+  --panel:#0d1d27;
+  --panel2:#132630;
+  --line:#25404b;
+  --text:#f3f8f5;
+  --muted:#89a0a8;
+  --accent:#c9ff3d;
+  --accent2:#35b8ff;
+  --danger:#ff5f70;
+  --home:#c9ff3d;
+  --away:#ff6b4a;
+}
+
+.identity[class*="tactical"]{
+  --bg:#edf2ee;
+  --panel:#fbfdfb;
+  --panel2:#e7eee9;
+  --line:#c6d4cc;
+  --text:#10231b;
+  --muted:#64786d;
+  --accent:#167252;
+  --accent2:#ff6b4a;
+  --danger:#c94156;
+  --home:#167252;
+  --away:#ff6b4a;
+}
+
+.logo{gap:11px!important}
+.logoSymbol{
+  position:relative;
+  width:38px!important;
+  height:38px!important;
+  overflow:hidden;
+  border-radius:12px 12px 17px 9px!important;
+  background:var(--accent)!important;
+  color:#07131b!important;
+  transform:rotate(-5deg)!important;
+  box-shadow:0 8px 24px color-mix(in srgb,var(--accent) 22%,transparent);
+}
+.logoSymbol:before,.logoSymbol:after{content:"";position:absolute;pointer-events:none}
+.logoSymbol:before{left:5px;right:5px;top:18px;height:2px;background:#07131b;opacity:.38}
+.logoSymbol:after{top:4px;bottom:4px;left:18px;width:2px;background:#07131b;opacity:.2}
+.logoSymbol i{position:absolute;width:8px;height:8px;border-radius:50%;right:5px;top:5px;background:#ff6b4a;box-shadow:0 0 0 2px #07131b}
+.logoSymbol b{position:relative;z-index:2;font-size:10px;font-weight:1000;letter-spacing:-.7px;transform:rotate(5deg) translate(-2px,2px)}
+.wordmark{font-size:18px!important;letter-spacing:-1.1px!important;font-weight:950}
+.wordmark span{color:var(--accent)}
