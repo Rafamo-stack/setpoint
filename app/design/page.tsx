@@ -1,9 +1,11 @@
 "use client";
 
+
 import { useEffect, useMemo, useState } from "react";
 import styles from "./design.module.css";
 import smart from "./smart.module.css";
 import brand from "./brand.module.css";
+
 
 type Concept = "arena" | "tactical";
 type View = "command" | "court" | "beach" | "analysis" | "management";
@@ -14,13 +16,14 @@ type ServeOrigin = 5 | 6 | 1;
 type AthleteProfile = { n: number; name: string; role: string; team: TeamSide; serveOrigin: ServeOrigin; serveTarget: number; note: string };
 type AttackTechnique = "Ataque" | "Largada" | "Segunda";
 type AttackDirection = "Paralela" | "Diagonal" | "Centro";
-type AttackRecord = { player: number; technique: AttackTechnique; direction: AttackDirection; zone: number; subzone?: string; result: string; block: string; reliable: boolean; originX?: number; originY?: number; team?: TeamSide };
-type PassRecord = { player: number; team: TeamSide; zone: number; grade: string; label: string };
-type ServeRecord = { player: number; team: TeamSide; origin: ServeOrigin; zone: number; subzone: string; result: string };
+type AttackRecord = { player: number; technique: AttackTechnique; direction: AttackDirection; zone: number; subzone?: string; outside?: boolean; result: string; block: string; reliable: boolean; originX?: number; originY?: number; team?: TeamSide };
+type PassRecord = { player: number; team: TeamSide; zone: number; subzone?: string; outside?: boolean; grade: string; label: string };
+type ServeRecord = { player: number; team: TeamSide; origin: ServeOrigin; zone: number; subzone: string; outside?: boolean; result: string };
 type ReportKind = "attack" | "pass" | "serve";
 type ArchivedRally = { id: number; winner: TeamSide; label: string; actions: RallyEvent[] };
 type SetTempo = "1º tempo" | "2º tempo" | "3º tempo";
 type PendingSet = { id: number; setter: number; team: TeamSide; attacker: number; destination: string; quality: "Boa" | "Ruim"; tempo: SetTempo };
+
 
 const views: Array<{ id: View; label: string; icon: string }> = [
   { id: "command", label: "Central", icon: "⌂" },
@@ -29,6 +32,7 @@ const views: Array<{ id: View; label: string; icon: string }> = [
   { id: "analysis", label: "Análises", icon: "↗" },
   { id: "management", label: "Gestão", icon: "◎" },
 ];
+
 
 const homePlayers = [
   { n: 11, role: "PON", x: 17, y: 35 },
@@ -39,6 +43,7 @@ const homePlayers = [
   { n: 9, role: "OPO", x: 68, y: 75 },
 ];
 
+
 const awayPlayers = [
   { n: 29, role: "OPO", x: 25, y: 25 },
   { n: 24, role: "CEN", x: 49, y: 29 },
@@ -48,6 +53,7 @@ const awayPlayers = [
   { n: 27, role: "LEV", x: 71, y: 65 },
 ];
 
+
 function Mark({ compact = false }: { compact?: boolean }) {
   return (
     <div className={`${styles.mark} ${brand.logo}`}>
@@ -56,6 +62,7 @@ function Mark({ compact = false }: { compact?: boolean }) {
     </div>
   );
 }
+
 
 function Athlete({
   number,
@@ -98,6 +105,7 @@ function Athlete({
   );
 }
 
+
 function Metric({ label, value, detail, tone }: { label: string; value: string; detail: string; tone?: string }) {
   return (
     <article className={styles.metric} data-tone={tone}>
@@ -107,6 +115,7 @@ function Metric({ label, value, detail, tone }: { label: string; value: string; 
     </article>
   );
 }
+
 
 function RosterMini({ number, role, name, team, active, onClick }: { number: number; role: string; name: string; team: "home" | "away"; active: boolean; onClick: () => void }) {
   return (
@@ -118,6 +127,7 @@ function RosterMini({ number, role, name, team, active, onClick }: { number: num
   );
 }
 
+
 function CourtToken({ number, role, x, y, team, active, suggested, onClick }: { number: number; role: string; x: number; y: number; team: TeamSide; active: boolean; suggested?: boolean; onClick: () => void }) {
   return (
     <button className={`${styles.courtToken} ${styles[team]} ${active ? styles.tokenActive : ""} ${suggested ? smart.suggestedToken : ""}`} style={{ left: `${x}%`, top: `${y}%` }} onClick={onClick} aria-label={`${role} camisa ${number}`}>
@@ -127,10 +137,12 @@ function CourtToken({ number, role, x, y, team, active, suggested, onClick }: { 
   );
 }
 
+
 const rosterNames: Record<number, string> = {
   2: "André Lima", 4: "Bruno Reis", 7: "Rafael Luz", 9: "Lucas Prado", 11: "Caio Mendes", 15: "Igor Nunes",
   18: "Murilo Alves", 22: "Tomás R.", 24: "Davi Costa", 27: "Enzo Melo", 29: "Nicolas S.", 31: "João Vitor", 35: "Matheus P.", 36: "Pedro Lima",
 };
+
 
 const initialProfiles: AthleteProfile[] = [
   { n: 7, name: "Rafael Luz", role: "LEV", team: "home", serveOrigin: 1, serveTarget: 1, note: "Acelera a bola com passe na mão" },
@@ -149,6 +161,7 @@ const initialProfiles: AthleteProfile[] = [
   { n: 36, name: "Pedro Lima", role: "LIB", team: "away", serveOrigin: 1, serveTarget: 6, note: "Líbero adversário" },
 ];
 
+
 const sampleAttackRecords: AttackRecord[] = [
   ...Array.from({ length: 4 }, (_, index) => ({ player: 11, technique: "Ataque" as const, direction: "Paralela" as const, zone: 1, result: index < 2 ? "Ponto" : "Defesa", block: "Sem desvio", reliable: true })),
   ...Array.from({ length: 2 }, () => ({ player: 11, technique: "Largada" as const, direction: "Centro" as const, zone: 5, result: "Defesa", block: "Sem desvio", reliable: true })),
@@ -157,6 +170,7 @@ const sampleAttackRecords: AttackRecord[] = [
   { player: 11, technique: "Ataque", direction: "Diagonal", zone: 7, result: "Ponto", block: "Sem desvio", reliable: true },
   { player: 11, technique: "Ataque", direction: "Diagonal", zone: 9, result: "Ponto", block: "Sem desvio", reliable: true },
 ];
+
 
 const samplePassRecords: PassRecord[] = [
   { player: 11, team: "home", zone: 2, grade: "#", label: "perfeita" },
@@ -167,11 +181,13 @@ const samplePassRecords: PassRecord[] = [
   { player: 31, team: "away", zone: 5, grade: "+", label: "positiva" },
 ];
 
+
 const sampleServeRecords: ServeRecord[] = [
   { player: 11, team: "home", origin: 1, zone: 5, subzone: "E", result: "Em jogo" },
   { player: 11, team: "home", origin: 1, zone: 8, subzone: "B", result: "Ace" },
   { player: 31, team: "away", origin: 6, zone: 5, subzone: "D", result: "Em jogo" },
 ];
+
 
 const sampleRallies: ArchivedRally[] = [
   { id: 2, winner: "home", label: "Rally #27 · 12 × 10", actions: [
@@ -186,6 +202,7 @@ const sampleRallies: ArchivedRally[] = [
     { tag: "ATA", player: "#29 Nicolas S.", detail: "Ataque diagonal para Z7H", grade: "+", team: "away" },
   ]},
 ];
+
 
 function ReportCourt({ kind, team, attacks, passes, serves }: { kind: ReportKind; team: TeamSide; attacks: AttackRecord[]; passes: PassRecord[]; serves: ServeRecord[] }) {
   const zone = (number: number, side: TeamSide) => {
@@ -218,13 +235,16 @@ function ReportCourt({ kind, team, attacks, passes, serves }: { kind: ReportKind
   </div>;
 }
 
+
 const nextRotationSlot: Record<number, number> = { 1: 6, 6: 5, 5: 4, 4: 3, 3: 2, 2: 1 };
+
 
 function rotatedSlot(initial: number, steps: number) {
   let slot = initial;
   for (let index = 0; index < steps; index += 1) slot = nextRotationSlot[slot];
   return slot;
 }
+
 
 function slotPosition(slot: number, team: "home" | "away") {
   const home: Record<number, { x: number; y: number }> = {
@@ -238,12 +258,15 @@ function slotPosition(slot: number, team: "home" | "away") {
   return team === "home" ? home[slot] : away[slot];
 }
 
+
 type IndoorRole = "LEV" | "OP" | "P1" | "P2" | "M1" | "M2" | "LIB";
 type FormationMode = "receive" | "defense" | "attack" | "rotation";
 type CanonicalPoint = { x: number; d: number };
 
+
 const rotationStepsBySetterSlot: Record<number, number> = { 1: 0, 6: 1, 5: 2, 4: 3, 3: 4, 2: 5 };
 const initialRoleSlots: Record<Exclude<IndoorRole, "LIB">, number> = { LEV: 1, P1: 2, M1: 3, OP: 4, P2: 5, M2: 6 };
+
 
 const receivePresets: Record<number, Record<IndoorRole, CanonicalPoint>> = {
   1: { LEV:{x:88,d:.88}, OP:{x:13,d:.10}, P1:{x:78,d:.65}, P2:{x:20,d:.66}, M1:{x:32,d:.16}, M2:{x:50,d:.20}, LIB:{x:50,d:.76} },
@@ -254,14 +277,17 @@ const receivePresets: Record<number, Record<IndoorRole, CanonicalPoint>> = {
   2: { LEV:{x:86,d:.08}, OP:{x:35,d:.91}, P1:{x:19,d:.60}, P2:{x:51,d:.68}, M1:{x:10,d:.15}, M2:{x:50,d:.20}, LIB:{x:80,d:.63} },
 };
 
+
 function roleSlot(role: Exclude<IndoorRole, "LIB">, setterSlot: number) {
   return rotatedSlot(initialRoleSlots[role], rotationStepsBySetterSlot[setterSlot]);
 }
+
 
 function visibleRole(role: Exclude<IndoorRole, "LIB">, setterSlot: number): IndoorRole {
   const slot = roleSlot(role, setterSlot);
   return role.startsWith("M") && (slot === 1 || slot >= 5) ? "LIB" : role;
 }
+
 
 function projectPoint(point: CanonicalPoint, team: TeamSide) {
   return team === "home"
@@ -269,15 +295,18 @@ function projectPoint(point: CanonicalPoint, team: TeamSide) {
     : { x: 100 - point.x, y: 50 - point.d * 50 };
 }
 
+
 function servicePoint(team: TeamSide, origin: ServeOrigin = 1) {
   const homeX: Record<ServeOrigin, number> = { 5: 16, 6: 50, 1: 84 };
   return team === "home" ? { x: homeX[origin], y: 93 } : { x: 100 - homeX[origin], y: 7 };
 }
 
+
 function functionalPoint(role: IndoorRole, slot: number, setterSlot: number, mode: FormationMode, setterTarget?: { x: number; y: number }, team: TeamSide = "home") {
   if (mode === "receive") return projectPoint(receivePresets[setterSlot][role], team);
   if (mode === "rotation") return slotPosition(slot, team);
   if (mode === "attack" && setterTarget) return setterTarget;
+
 
   const isFront = slot >= 2 && slot <= 4;
   let point: CanonicalPoint;
@@ -302,6 +331,7 @@ function functionalPoint(role: IndoorRole, slot: number, setterSlot: number, mod
   return projectPoint(point, team);
 }
 
+
 function validateReceivePreset(setterSlot: number) {
   const steps = rotationStepsBySetterSlot[setterSlot];
   const roleAtSlot = new Map<number, IndoorRole>();
@@ -321,10 +351,12 @@ function validateReceivePreset(setterSlot: number) {
   return errors;
 }
 
+
 const rotationAudit = [1,6,5,4,3,2].map(setterSlot => ({ setterSlot, errors: validateReceivePreset(setterSlot) }));
 if (rotationAudit.some(result => result.errors.length)) throw new Error(`Preset 5x1 inválido: ${JSON.stringify(rotationAudit)}`);
 
-function ScoutCockpit({ beach = false }: { beach?: boolean }) {
+
+function ScoutCockpit({ beach = false, onExit }: { beach?: boolean; onExit?: () => void }) {
   const [homeRotation, setHomeRotation] = useState(0);
   const [awayRotation, setAwayRotation] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
@@ -364,6 +396,10 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
   const [pendingSets, setPendingSets] = useState<PendingSet[]>([]);
   const [emergencySetter, setEmergencySetter] = useState<number | null>(null);
   const [reviewFaultTeam, setReviewFaultTeam] = useState<TeamSide>("home");
+  const [matchStarted, setMatchStarted] = useState(false);
+  const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
+  const [outsideCourt, setOutsideCourt] = useState(false);
+  const [attackOutside, setAttackOutside] = useState(false);
   const setterHomeSlot = rotatedSlot(1, homeRotation);
   const setterAwaySlot = rotatedSlot(1, awayRotation);
   const homeLineup = [
@@ -379,12 +415,14 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
   const attackPhases: RallyPhase[] = ["setter-quality", "setter-player", "attack-player", "attack-target", "block-result", "attack-result"];
   const receptionPhases: RallyPhase[] = ["ready", "serve-flight", "serve-target", "reception-player", "contact-zone"];
 
+
   function modeFor(team: TeamSide): FormationMode {
     const receiver = servingTeam === "home" ? "away" : "home";
     if (team === possession && attackPhases.includes(rallyPhase)) return "attack";
     if (team === receiver && receptionPhases.includes(rallyPhase) && contactKind === "reception") return "receive";
     return "defense";
   }
+
 
   function buildIndoorTeam(team: TeamSide, rotation: number, lineup: typeof homeLineup, liberoNumber: number) {
     const setterSlot = rotatedSlot(1, rotation);
@@ -402,6 +440,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     });
   }
 
+
   const teamHome = beach
     ? [{ n: 3, role: "BLOQ", x: 52, y: 69 }, { n: 12, role: "DEF", x: 24, y: 86 }]
     : buildIndoorTeam("home", homeRotation, homeLineup, 18);
@@ -409,6 +448,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     ? [{ n: 8, role: "BLOQ", x: 48, y: 31 }, { n: 14, role: "DEF", x: 76, y: 14 }]
     : buildIndoorTeam("away", awayRotation, awayLineup, 36);
   const allPlayers = [...teamHome.map(p => ({ ...p, team: "home" as const })), ...teamAway.map(p => ({ ...p, team: "away" as const }))];
+  const [actionMenuPlayer, setActionMenuPlayer] = useState<typeof allPlayers[number] | null>(null);
   const current = allPlayers.find(p => p.n === selected) ?? allPlayers[0];
   const homeLabel = beach ? "LUNA / BIA" : "SETPOINT";
   const awayLabel = beach ? "MAYA / CLARA" : "ATHLETIC";
@@ -444,9 +484,11 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     "rally-end": `${winner === "home" ? homeLabel : awayLabel} marcou o ponto`,
   };
 
+
   function playerLabel(number: number) {
     return `#${number} ${rosterNames[number] ?? (number === 14 ? "Clara" : number === 8 ? "Maya" : number === 3 ? "Bia" : "Luna")}`;
   }
+
 
   function serverFor(team: TeamSide) {
     if (beach) return team === "home" ? 12 : 14;
@@ -455,7 +497,12 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     return source.find(player => rotatedSlot(player.slot, rotation) === 1)?.n ?? (team === "home" ? 7 : 27);
   }
 
+
   function beginRally() {
+    setMatchStarted(true);
+    setOutsideCourt(false);
+    setAttackOutside(false);
+    setActionMenuPlayer(null);
     const server = serverFor(servingTeam);
     const receiverSide = servingTeam === "home" ? "away" : "home";
     setWinner(null);
@@ -470,13 +517,14 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     setPossession(receiverSide);
     setContactKind("reception");
     setEvents([{ tag: "SAQ", player: playerLabel(server), detail: "Saque em jogo", grade: "+", team: servingTeam }]);
-    setRallyPhase("serve-flight");
-    window.setTimeout(() => setRallyPhase("serve-target"), 550);
+    setRallyPhase("serve-target");
   }
+
 
   function addEvent(event: RallyEvent) {
     setEvents(value => [...value, event]);
   }
+
 
   function requestRallyEnd(side: TeamSide, detail: string, faultTeam: TeamSide = side === "home" ? "away" : "home") {
     setWinner(side);
@@ -485,6 +533,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     setReviewFaultTeam(faultTeam);
     setReviewOpen(true);
   }
+
 
   function finalizeRally(side: TeamSide, detail: string) {
     const pointEvent: RallyEvent = { tag: "PTO", player: side === "home" ? homeLabel : awayLabel, detail, grade: "●", team: side };
@@ -507,6 +556,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     }
     setRallyPhase("rally-end");
   }
+
 
   function handlePlayerClick(player: typeof allPlayers[number]) {
     const validReceiver = beach || player.role === "P1" || player.role === "P2" || player.role === "LIB";
@@ -539,6 +589,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     }
   }
 
+
   function zonePoint(zone: number, side: TeamSide) {
     const row = Math.floor((zone - 1) / 3);
     const column = (zone - 1) % 3;
@@ -547,13 +598,16 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     return { x, y };
   }
 
+
   function displayedZones(side: TeamSide) {
     return side === "home" ? [1,2,3,4,5,6,7,8,9] : [9,8,7,6,5,4,3,2,1];
   }
 
+
   function displayedSubzones(side: TeamSide) {
     return side === "home" ? [..."ABCDEFGHI"] : [..."IHGFEDCBA"];
   }
+
 
   function gradeForZone(zone: number, side: TeamSide) {
     const point = zonePoint(zone, side);
@@ -565,26 +619,28 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     return { grade: "-", label: "negativa" };
   }
 
-  function handleZone(zone: number) {
+
+  function chooseContactLanding(zone: number, subzone: string, outside = false) {
     setSelectedZone(zone);
-    if (rallyPhase === "contact-zone") {
-      const target = zonePoint(zone, possession);
-      const result = gradeForZone(zone, possession);
-      setPassTarget(target);
-      setSetterTargets(value => ({ ...value, [possession]: target }));
-      addEvent({ tag: contactKind === "reception" ? "REC" : "DEF", player: playerLabel(selected), detail: `${contactKind === "reception" ? "Recepção" : "Defesa"} ${result.label} · Z${zone}`, grade: result.grade, team: possession });
-      if (contactKind === "reception") setPassRecords(value => [...value, { player: selected, team: possession, zone, grade: result.grade, label: result.label }]);
-      setAttackTechnique("Ataque");
-      setAttackBlock("Sem desvio");
-      const setterDefended = contactKind === "defense" && selected === setterNumber;
-      setEmergencySetter(null);
-      if (setterDefended) setRallyPhase("setter-player");
-      else {
-        setSelected(setterNumber);
-        setRallyPhase("attack-player");
-      }
+    const target = attackDetailPoint(zone, subzone, possession);
+    const result = gradeForZone(zone, possession);
+    const location = (outside ? "Fora da quadra · " : "") + "Z" + zone + subzone;
+    setPassTarget(target);
+    setSetterTargets(value => ({ ...value, [possession]: target }));
+    addEvent({ tag: contactKind === "reception" ? "REC" : "DEF", player: playerLabel(selected), detail: (contactKind === "reception" ? "Recepção" : "Defesa") + " " + result.label + " · " + location, grade: result.grade, team: possession });
+    if (contactKind === "reception") setPassRecords(value => [...value, { player: selected, team: possession, zone, subzone, outside, grade: result.grade, label: result.label }]);
+    setOutsideCourt(false);
+    setAttackTechnique("Ataque");
+    setAttackBlock("Sem desvio");
+    const setterDefended = contactKind === "defense" && selected === setterNumber;
+    setEmergencySetter(null);
+    if (setterDefended) setRallyPhase("setter-player");
+    else {
+      setSelected(setterNumber);
+      setRallyPhase("attack-player");
     }
   }
+
 
   function attackDetailPoint(zone: number, subzone: string, side: TeamSide) {
     const center = zonePoint(zone, side);
@@ -595,7 +651,8 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     return { x: center.x + [-11.1,0,11.1][column], y: center.y + [-5.55,0,5.55][row] };
   }
 
-  function chooseAttackSubzone(zone: number, subzone: string) {
+
+  function chooseAttackSubzone(zone: number, subzone: string, outside = false) {
     if (rallyPhase === "serve-target") {
       const server = serverFor(servingTeam);
       const profile = profiles.find(item => item.n === server);
@@ -603,16 +660,20 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
       setAttackZone(zone);
       setAttackSubzone(subzone);
       setPassTarget(point);
-      setServeRecords(value => [...value, { player: server, team: servingTeam, origin: profile?.serveOrigin ?? 1, zone, subzone, result: "Em jogo" }]);
-      setEvents(value => value.map((event,index) => index === 0 ? { ...event, detail: `Saque para Z${zone}${subzone}` } : event));
+      setServeRecords(value => [...value, { player: server, team: servingTeam, origin: profile?.serveOrigin ?? 1, zone, subzone, outside, result: "Em jogo" }]);
+      setEvents(value => value.map((event,index) => index === 0 ? { ...event, detail: "Saque para " + (outside ? "fora da quadra · " : "") + "Z" + zone + subzone } : event));
+      setOutsideCourt(false);
       window.setTimeout(() => setRallyPhase("reception-player"), 350);
       return;
     }
     setAttackZone(zone);
     setAttackSubzone(subzone);
-    addEvent({ tag: "ATA", player: playerLabel(selected), detail: `${attackTechnique} para Z${zone}${subzone}${attackBlock === "Sem desvio" ? " · trajetória limpa" : ` · ${attackBlock.toLowerCase()}`}`, grade: "→", team: possession });
+    addEvent({ tag: "ATA", player: playerLabel(selected), detail: attackTechnique + " para " + (outside ? "fora da quadra · " : "") + "Z" + zone + subzone + (attackBlock === "Sem desvio" ? " · trajetória limpa" : " · " + attackBlock.toLowerCase()), grade: "→", team: possession });
+    setAttackOutside(outside);
+    setOutsideCourt(false);
     setRallyPhase("attack-result");
   }
+
 
   function chooseSet(grade: string, label: string) {
     addEvent({ tag: "LEV", player: playerLabel(setterNumber), detail: `Levantamento ${label.toLowerCase()}`, grade, team: possession });
@@ -621,6 +682,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
       setRallyPhase("attack-target");
     } else setRallyPhase("attack-player");
   }
+
 
   function chooseBlock(kind: string) {
     const blocker = possession === "home" ? "away" : "home";
@@ -633,12 +695,13 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     setRallyPhase("attack-result");
   }
 
+
   function chooseAttackResult(kind: string) {
     if (attackZone) {
       const attacker = allPlayers.find(player => player.n === selected);
       const targetX = zonePoint(attackZone, possession === "home" ? "away" : "home").x;
       const direction: AttackDirection = !attacker || (attacker.x > 34 && attacker.x < 66) ? "Centro" : (attacker.x < 34 && targetX < 34) || (attacker.x > 66 && targetX > 66) ? "Paralela" : "Diagonal";
-      setAttackRecords(value => [...value, { player: selected, technique: attackTechnique, direction, zone: attackZone, subzone: attackSubzone ?? undefined, result: kind, block: attackBlock, reliable: attackBlock === "Sem desvio" || kind === "Bloqueio", originX: attacker?.x, originY: attacker?.y, team: possession }]);
+      setAttackRecords(value => [...value, { player: selected, technique: attackTechnique, direction, zone: attackZone, subzone: attackSubzone ?? undefined, outside: attackOutside, result: kind, block: attackBlock, reliable: attackBlock === "Sem desvio" || kind === "Bloqueio", originX: attacker?.x, originY: attacker?.y, team: possession }]);
     }
     if (kind === "Ponto") return requestRallyEnd(possession, "Bola no chão");
     if (kind === "Erro") return requestRallyEnd(possession === "home" ? "away" : "home", "Erro de ataque");
@@ -651,6 +714,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     } else setRallyPhase("attack-player");
   }
 
+
   function isSuggested(player: typeof allPlayers[number]) {
     if (rallyPhase === "reception-player") return player.team === possession && (beach || player.role === "P1" || player.role === "P2" || player.role === "LIB");
     if (rallyPhase === "defense-player") return player.team === possession;
@@ -660,14 +724,27 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     return false;
   }
 
+
+  useEffect(() => {
+    if (!matchStarted) return;
+    window.localStorage.setItem("setpoint-active-match", JSON.stringify({ savedAt: new Date().toISOString(), beach, homeScore, awayScore, servingTeam, rallyPhase, events, rallyArchive }));
+  }, [matchStarted, beach, homeScore, awayScore, servingTeam, rallyPhase, events, rallyArchive]);
+
+  function leaveActivity() {
+    window.localStorage.setItem("setpoint-active-match", JSON.stringify({ savedAt: new Date().toISOString(), beach, homeScore, awayScore, servingTeam, rallyPhase, events, rallyArchive }));
+    setExitConfirmOpen(false);
+    onExit?.();
+  }
+
   useEffect(() => {
     function handleEnter(event: KeyboardEvent) {
       if ((event.target as HTMLElement)?.tagName === "INPUT") return;
-      if (event.key === "Enter" && (rallyPhase === "ready" || rallyPhase === "rally-end")) beginRally();
+      if (matchStarted && event.key === "Enter" && (rallyPhase === "ready" || rallyPhase === "rally-end")) beginRally();
     }
     window.addEventListener("keydown", handleEnter);
     return () => window.removeEventListener("keydown", handleEnter);
   });
+
 
   const selectedPlayer = allPlayers.find(player => player.n === selected);
   const ballAtPass = passTarget && ["setter-quality", "attack-player"].includes(rallyPhase);
@@ -675,6 +752,8 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
   const incomingServe = rallyPhase === "reception-player" && contactKind === "reception";
   const ballPosition = detailedAttackTarget ?? (ballAtPass ? passTarget : incomingServe ? { x: 50, y: servingTeam === "home" ? 25 : 75 } : selectedPlayer ? { x: selectedPlayer.x, y: selectedPlayer.y - 5 } : { x: 50, y: 50 });
   const zoneSide: TeamSide = rallyPhase === "serve-target" ? (servingTeam === "home" ? "away" : "home") : rallyPhase === "attack-target" ? (possession === "home" ? "away" : "home") : possession;
+  const actionName = rallyPhase === "reception-player" ? "Registrar recepção" : rallyPhase === "defense-player" ? "Registrar defesa" : rallyPhase === "attack-player" ? (actionMenuPlayer?.n === effectiveSetterNumber ? "Segunda bola" : "Selecionar atacante") : "Selecionar atleta";
+
 
   function cycleHomeRotation(direction: 1 | -1) {
     setHomeRotation(value => (value + direction + 6) % 6);
@@ -691,6 +770,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     setEvents([]);
   }
 
+
   const selectedProfile = profiles.find(profile => profile.n === profileNumber) ?? profiles[0];
   const profileAttacks = attackRecords.filter(record => record.player === profileNumber);
   const profilePasses = passRecords.filter(record => record.player === profileNumber);
@@ -699,9 +779,11 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
   const profilePoints = profileAttacks.filter(record => record.result === "Ponto").length;
   const selectedArchivedRally = rallyArchive.find(rally => rally.id === selectedRallyId) ?? rallyArchive[0];
 
+
   function updateProfile(patch: Partial<AthleteProfile>) {
     setProfiles(value => value.map(profile => profile.n === profileNumber ? { ...profile, ...patch } : profile));
   }
+
 
   function openQuickReview() {
     const other = (team: TeamSide): TeamSide => team === "home" ? "away" : "home";
@@ -726,23 +808,28 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     setReviewOpen(true);
   }
 
+
   function confirmQuickReview() {
     pendingSets.forEach(set => addEvent({ tag: "AJU", player: playerLabel(set.setter), detail: `Levantamento ${set.quality.toLowerCase()} · ${set.tempo} · ${set.destination} para ${playerLabel(set.attacker)}`, grade: set.quality === "Ruim" ? "-" : "+", team: set.team }));
     setReviewOpen(false);
     finalizeRally(reviewWinner, reviewReason);
   }
 
+
   function updateArchivedAction(rallyId: number, actionIndex: number, patch: Partial<RallyEvent>) {
     setRallyArchive(history => history.map(rally => rally.id === rallyId ? { ...rally, actions: rally.actions.map((action,index) => index === actionIndex ? { ...action, ...patch } : action) } : rally));
   }
+
 
   function updatePendingSet(id: number, quality: "Boa" | "Ruim") {
     setPendingSets(value => value.map(set => set.id === id ? { ...set, quality } : set));
   }
 
+
   function updatePendingTempo(id: number, tempo: SetTempo) {
     setPendingSets(value => value.map(set => set.id === id ? { ...set, tempo } : set));
   }
+
 
   function chooseReviewReason(reason: string) {
     setReviewReason(reason);
@@ -751,12 +838,14 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
     else if (reason !== "Bola no chão") setReviewWinner(reviewFaultTeam === "home" ? "away" : "home");
   }
 
+
   function submitCommand() {
     const value = command.trim();
     if (!value) return;
     setLastCommand(`✓ “${value}” interpretado e adicionado ao rally`);
     setCommand("");
   }
+
 
   return (
     <section className={`${styles.simpleScout} ${fullscreen ? styles.simpleScoutFullscreen : ""}`}>
@@ -769,9 +858,11 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
           {!beach && <button onClick={() => setRosterOpen(true)}>☷ Relação nominal</button>}
           {!beach && <button onClick={() => setHistoryOpen(true)}>◷ Histórico de pontos</button>}
           <button onClick={() => setAdvanced(value => !value)}>{advanced ? "Ocultar detalhes" : "Mais detalhes"}</button>
+          <button onClick={() => setExitConfirmOpen(true)}>← Sair da atividade</button>
           <button className={styles.fullscreenButton} onClick={() => setFullscreen(value => !value)}>{fullscreen ? "× Sair" : "⛶ Tela cheia"}</button>
         </nav>
       </header>
+
 
       <div className={styles.simpleStage}>
         <main className={styles.simpleCourtArea}>
@@ -781,26 +872,31 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
             <div className={styles.courtGrid}>{[1,2,3,4,5,6,7,8,9].map(zone => <span key={zone}>{zone}</span>)}</div>
             <div className={styles.scoutNet}><i /><i /><i /><i /><i /><i /></div>
             <div className={styles.threeMeterTop} /><div className={styles.threeMeterBottom} />
-            {allPlayers.map(player => <CourtToken key={`${player.team}-${player.n}`} number={player.n} role={player.role} x={player.x} y={player.y} team={player.team} active={selected === player.n} suggested={isSuggested(player)} onClick={() => handlePlayerClick(player)} />)}
-            <span className={smart.smartBall} style={{ left: `${ballPosition.x}%`, top: `${ballPosition.y}%` }}>●</span>
+            {allPlayers.map(player => <CourtToken key={player.team + "-" + player.n} number={player.n} role={player.role} x={player.x} y={player.y} team={player.team} active={selected === player.n} suggested={isSuggested(player)} onClick={() => setActionMenuPlayer(player)} />)}
+            <span className={smart.smartBall} style={{ left: ballPosition.x + "%", top: ballPosition.y + "%" }}>●</span>
+            {actionMenuPlayer && <div style={{ position: "absolute", left: actionMenuPlayer.x + "%", top: Math.max(8, actionMenuPlayer.y - 17) + "%", transform: "translateX(-50%)", zIndex: 12, minWidth: 164, padding: 8, borderRadius: 10, background: "#101827", border: "1px solid #ffffff44", boxShadow: "0 12px 30px #0009", textAlign: "center" }}><strong style={{ display: "block", marginBottom: 7, fontSize: 11 }}>{isSuggested(actionMenuPlayer) ? actionName : "Ação indisponível"}</strong>{isSuggested(actionMenuPlayer) ? <button style={{ width: "100%", border: 0, borderRadius: 7, padding: 8, background: "#e7c15d", color: "#101827", fontWeight: 900 }} onClick={() => { handlePlayerClick(actionMenuPlayer); setActionMenuPlayer(null); }}>{actionName}</button> : <small style={{ color: "#cbd5e1" }}>Siga a etapa atual do rally.</small>}<button style={{ width: "100%", marginTop: 5, border: 0, background: "transparent", color: "#cbd5e1", fontSize: 10 }} onClick={() => setActionMenuPlayer(null)}>Cancelar</button></div>}
+            {!matchStarted && <div style={{ position: "absolute", inset: 0, zIndex: 11, display: "grid", placeItems: "center", background: "#07101acc" }}><div style={{ textAlign: "center" }}><strong style={{ display: "block", fontSize: 22, marginBottom: 8 }}>Partida pronta para começar</strong><small style={{ display: "block", color: "#cbd5e1", marginBottom: 14 }}>Inicie para liberar o scout e registrar as ações.</small><button style={{ border: 0, borderRadius: 10, background: "#e7c15d", color: "#101827", padding: "13px 20px", fontWeight: 900 }} onClick={beginRally}>▶ Iniciar partida</button></div></div>}
             {rallyPhase === "contact-zone" && (
-              <div className={`${smart.zonePicker} ${zoneSide === "away" ? smart.zoneTop : smart.zoneBottom}`}>
-                {displayedZones(zoneSide).map(zone => <button key={zone} className={selectedZone === zone ? smart.zoneSelected : ""} onClick={() => handleZone(zone)} aria-label={`Zona ${zone}`}><b>{zone}</b><small>{gradeForZone(zone, zoneSide).grade === "#" ? "ideal" : ""}</small></button>)}
+              <div className={smart.detailedZonePicker + " " + (zoneSide === "away" ? smart.zoneTop : smart.zoneBottom)}>
+                {displayedZones(zoneSide).map(zone => <section key={zone}><strong>{zone}</strong><div>{displayedSubzones(zoneSide).map(letter => <button key={letter} onClick={() => chooseContactLanding(zone,letter,outsideCourt)} aria-label={"Zona " + (outsideCourt ? "fora " : "") + zone + letter}>{letter}</button>)}</div></section>)}
               </div>
             )}
-            {(rallyPhase === "attack-target" || rallyPhase === "serve-target") && <div className={`${smart.detailedZonePicker} ${zoneSide === "away" ? smart.zoneTop : smart.zoneBottom}`}>{displayedZones(zoneSide).map(zone => <section key={zone}><strong>{zone}</strong><div>{displayedSubzones(zoneSide).map(letter => <button key={letter} onClick={() => chooseAttackSubzone(zone,letter)} aria-label={`Zona ${zone}${letter}`}>{letter}</button>)}</div></section>)}</div>}
+            {(rallyPhase === "attack-target" || rallyPhase === "serve-target" || rallyPhase === "contact-zone") && <button style={{ position: "absolute", right: 12, top: zoneSide === "away" ? 12 : undefined, bottom: zoneSide === "home" ? 12 : undefined, zIndex: 8, border: "1px solid #fff8", borderRadius: 8, background: outsideCourt ? "#f2c55c" : "#182235", color: outsideCourt ? "#111" : "#fff", padding: "7px 9px", fontSize: 10, fontWeight: 800 }} onClick={() => setOutsideCourt(value => !value)}>{outsideCourt ? "✓ Fora da quadra" : "Marcar fora da quadra"}</button>}
+            {(rallyPhase === "attack-target" || rallyPhase === "serve-target") && <div className={smart.detailedZonePicker + " " + (zoneSide === "away" ? smart.zoneTop : smart.zoneBottom)}>{displayedZones(zoneSide).map(zone => <section key={zone}><strong>{zone}</strong><div>{displayedSubzones(zoneSide).map(letter => <button key={letter} onClick={() => chooseAttackSubzone(zone,letter,outsideCourt)} aria-label={"Zona " + (outsideCourt ? "fora " : "") + zone + letter}>{letter}</button>)}</div></section>)}</div>}
             {!beach && (homeRotation > 0 || awayRotation > 0) && <div key={`${homeRotation}-${awayRotation}`} className={styles.rotationMotion}>↻ Rodízio atualizado · P{setterHomeSlot}</div>}
           </div>
         </main>
 
+
         <aside className={styles.simpleHistory}>
           <div className={styles.simpleHistoryHead}><div><span>RALLY ATUAL</span><strong>Leitura automática</strong></div><em>● {rallyPhase === "rally-end" ? "FINALIZADO" : rallyPhase === "ready" ? "AGUARDANDO" : "BOLA VIVA"}</em></div>
-          {events.length === 0 && <div className={smart.emptyRally}><b>ENTER</b><span>Inicia o saque e abre o fluxo visual.</span></div>}
+           {events.length === 0 && <div className={smart.emptyRally}><b>{matchStarted ? "ENTER" : "INICIAR"}</b><span>{matchStarted ? "Inicia o saque e abre o fluxo visual." : "Inicie a partida para liberar o scout."}</span></div>}
           {events.map((event, index) => <article key={`${event.tag}-${index}`}><i className={event.team === "home" ? styles.homeCode : styles.awayCode}>{event.tag}</i><div><strong>{event.player}</strong><span>{event.detail}</span></div><b>{event.grade}</b></article>)}
           <button className={styles.undoSimple}>↶ Desfazer último</button>
           {advanced && <div className={styles.advancedDrawer}><strong>Detalhes avançados</strong><p>Código equivalente: <code>a31R+</code></p><p>Rotação: P{setterAwaySlot}</p><p>Trajetória: Z1 → Z5</p><button>Editar rally completo</button></div>}
         </aside>
       </div>
+
 
       <div className={`${styles.simpleActionDock} ${smart.actionDock}`}>
         <div className={styles.simpleSelected}>
@@ -810,7 +906,8 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
         <div className={smart.smartDecision}>
           <span>{phaseStep[rallyPhase]}</span><strong>{prompt[rallyPhase]}</strong>
           <div className={smart.decisionButtons}>
-            {rallyPhase === "ready" && <button className={smart.primaryDecision} onClick={beginRally}>▶ Iniciar saque <kbd>Enter</kbd></button>}
+             {!matchStarted && <button className={smart.primaryDecision} onClick={beginRally}>▶ Iniciar partida</button>}
+             {matchStarted && rallyPhase === "ready" && <button className={smart.primaryDecision} onClick={beginRally}>▶ Iniciar saque <kbd>Enter</kbd></button>}
             {rallyPhase === "setter-quality" && [["-","Ruim"],["+","Boa"],["#","Perfeita"],["↗","Segunda"]].map(([grade,label]) => <button key={label} onClick={() => chooseSet(grade,label)}><b>{grade}</b>{label}</button>)}
             {rallyPhase === "attack-target" && <><button className={attackTechnique === "Ataque" ? smart.primaryDecision : ""} onClick={() => setAttackTechnique("Ataque")}>Ataque</button><button className={attackTechnique === "Largada" ? smart.primaryDecision : ""} onClick={() => setAttackTechnique("Largada")}>Largada</button><button className={attackBlock === "Desviou" ? smart.primaryDecision : ""} onClick={() => setAttackBlock(value => value === "Desviou" ? "Sem desvio" : "Desviou")}>{attackBlock === "Desviou" ? "✓ Desviou" : "Sem desvio"}</button></>}
             {rallyPhase === "block-result" && ["Sem bloqueio","Desviou","Amorteceu","Bloqueio ponto"].map(label => <button key={label} onClick={() => chooseBlock(label)}>{label}</button>)}
@@ -822,6 +919,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
         <div className={smart.flowRail}><span className={events.some(event => event.tag === "SAQ") ? smart.flowDone : ""}>Saque</span><i>›</i><span className={events.some(event => event.tag === "REC" || event.tag === "DEF") ? smart.flowDone : ""}>Passe</span><i>›</i><span className={events.some(event => event.tag === "LEV") ? smart.flowDone : ""}>Levantamento</span><i>›</i><span className={events.some(event => event.tag === "ATA") ? smart.flowDone : ""}>Ataque</span></div>
       </div>
 
+
       <div className={styles.commandChat}>
         <div className={styles.commandStatus}><i>⌁</i><span><strong>Comando rápido</strong><small>{lastCommand}</small></span></div>
         <div className={styles.commandBox}>
@@ -830,6 +928,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
         </div>
         <div className={styles.commandSuggestions}><button onClick={() => setCommand("31 rec +")}>31 rec +</button><button onClick={() => setCommand("9 ataque #")}>9 ataque #</button><button onClick={() => setCommand("ponto nosso")}>ponto nosso</button></div>
       </div>
+
 
       {historyOpen && <div className={smart.modalBackdrop} onClick={() => setHistoryOpen(false)}>
         <section className={smart.historyModal} onClick={event => event.stopPropagation()}>
@@ -840,6 +939,7 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
           </div>
         </section>
       </div>}
+
 
       {rosterOpen && <div className={smart.modalBackdrop} onClick={() => setRosterOpen(false)}>
         <section className={smart.rosterModal} onClick={event => event.stopPropagation()}>
@@ -865,18 +965,29 @@ function ScoutCockpit({ beach = false }: { beach?: boolean }) {
         </section>
       </div>}
 
+
+      {exitConfirmOpen && <div className={smart.modalBackdrop}>
+        <section className={smart.reviewModal} onClick={event => event.stopPropagation()}>
+          <header><div><span>SAIR DA ATIVIDADE</span><h2>Salvar e encerrar o scout?</h2></div></header>
+          <div className={smart.inferredOutcome}><span>Salvamento automático</span><strong>O rally atual e o placar serão guardados</strong><small>Você poderá retomar esta partida depois.</small></div>
+          <div style={{ display: "flex", gap: 8, marginTop: 18 }}><button style={{ flex: 1 }} onClick={() => setExitConfirmOpen(false)}>Continuar na atividade</button><button className={smart.confirmReview} style={{ flex: 1, marginTop: 0 }} onClick={leaveActivity}>Salvar e sair</button></div>
+        </section>
+      </div>}
       {reviewOpen && <div className={smart.modalBackdrop}><section className={smart.reviewModal} onClick={event => event.stopPropagation()}><header><div><span>REVISÃO PÓS-PONTO</span><h2>Confirme apenas o que não foi marcado</h2></div></header><div className={smart.inferredOutcome}><span>O sistema identificou</span><strong>{reviewReason}</strong><small>O ponto e o próximo sacador serão definidos automaticamente.</small></div><div className={smart.pendingSetList}><strong>Levantamentos do rally · {pendingSets.length}</strong>{pendingSets.length === 0 ? <p>Nenhum levantamento ficou pendente.</p> : pendingSets.map((set,index) => <article key={set.id}><span><b>{index + 1}. {playerLabel(set.setter)} → {playerLabel(set.attacker)}</b><small>{set.destination} · {set.team === "home" ? homeLabel : awayLabel}</small></span><div className={smart.setChecks}><div><small>Qualidade</small><button className={set.quality === "Boa" ? smart.choiceActive : ""} onClick={() => updatePendingSet(set.id,"Boa")}>Boa</button><button className={set.quality === "Ruim" ? smart.choiceActive : ""} onClick={() => updatePendingSet(set.id,"Ruim")}>Ruim</button></div><div><small>Tempo</small>{(["1º tempo","2º tempo","3º tempo"] as SetTempo[]).map(tempo => <button key={tempo} className={set.tempo === tempo ? smart.choiceActive : ""} onClick={() => updatePendingTempo(set.id,tempo)}>{tempo.replace(" tempo","")}</button>)}</div></div></article>)}</div><label>Corrigir identificação, se necessário<div>{["Erro de saque","Erro de recepção","Erro de levantamento","Erro de ataque","Erro de defesa","Bloqueio","Bola no chão"].map(value => <button key={value} className={reviewReason === value ? smart.choiceActive : ""} onClick={() => chooseReviewReason(value)}>{value}</button>)}</div></label><button className={smart.confirmReview} onClick={confirmQuickReview}>Confirmar pendências e preparar o saque</button></section></div>}
     </section>
   );
 }
 
-function CourtView({ concept: _concept }: { concept: Concept }) {
-  return <ScoutCockpit />;
+
+function CourtView({ concept: _concept, onExit }: { concept: Concept; onExit: () => void }) {
+  return <ScoutCockpit onExit={onExit} />;
 }
 
-function BeachView() {
-  return <ScoutCockpit beach />;
+
+function BeachView({ onExit }: { onExit: () => void }) {
+  return <ScoutCockpit beach onExit={onExit} />;
 }
+
 
 function CommandView() {
   return (
@@ -919,6 +1030,7 @@ function CommandView() {
   );
 }
 
+
 function AnalysisView() {
   return (
     <section className={styles.analysis}>
@@ -959,6 +1071,7 @@ function AnalysisView() {
   );
 }
 
+
 function ManagementView() {
   return (
     <section className={styles.management}>
@@ -990,6 +1103,7 @@ function ManagementView() {
     </section>
   );
 }
+
 
 export default function DesignConcepts() {
   const [concept, setConcept] = useState<Concept>("arena");
@@ -1024,8 +1138,8 @@ export default function DesignConcepts() {
         </div>
         <div className={styles.content}>
           {view === "command" && <CommandView />}
-          {view === "court" && <CourtView concept={concept} />}
-          {view === "beach" && <BeachView />}
+          {view === "court" && <CourtView concept={concept} onExit={() => setView("command")} />}
+          {view === "beach" && <BeachView onExit={() => setView("command")} />}
           {view === "analysis" && <AnalysisView />}
           {view === "management" && <ManagementView />}
         </div>
